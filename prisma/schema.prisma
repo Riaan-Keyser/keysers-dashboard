@@ -12,107 +12,115 @@ datasource db {
 
 // User Management
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String
-  password      String
-  role          UserRole  @default(STAFF)
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  lastLoginAt   DateTime?
-  
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  password    String
+  role        UserRole  @default(STAFF)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
   // Relations
-  createdVendors        Vendor[]          @relation("CreatedBy")
-  createdEquipment      Equipment[]       @relation("CreatedBy")
-  updatedEquipment      Equipment[]       @relation("UpdatedBy")
-  priceChanges          PriceHistory[]    @relation("ChangedBy")
-  repairLogs            RepairLog[]       @relation("CreatedBy")
-  activityLogs          ActivityLog[]
-  reviewedPurchases     PendingPurchase[] @relation("ReviewedPurchases")
-  approvedPurchases     PendingPurchase[] @relation("ApprovedPurchases")
-  
+  createdVendors    Vendor[]          @relation("CreatedBy")
+  createdEquipment  Equipment[]       @relation("CreatedBy")
+  updatedEquipment  Equipment[]       @relation("UpdatedBy")
+  priceChanges      PriceHistory[]    @relation("ChangedBy")
+  repairLogs        RepairLog[]       @relation("CreatedBy")
+  activityLogs      ActivityLog[]
+  reviewedPurchases PendingPurchase[] @relation("ReviewedPurchases")
+  approvedPurchases PendingPurchase[] @relation("ApprovedPurchases")
+
+  // Inspection relations
+  createdInspectionSessions InspectionSession[] @relation("CreatedBy")
+  verifiedItems             VerifiedGearItem[]  @relation("VerifiedBy")
+  approvedItems             VerifiedGearItem[]  @relation("ApprovedBy")
+  priceOverrides            PriceOverride[]     @relation("OverriddenBy")
+  reopenedItems             VerifiedGearItem[]  @relation("ReopenedBy")
+
   @@map("users")
 }
 
 enum UserRole {
-  ADMIN       // Full access to everything
-  MANAGER     // Can manage inventory, pricing, users (except admins)
-  STAFF       // Can view and update inventory, cannot manage users or critical settings
-  TECHNICIAN  // Can update repair status, view assigned repairs
-  VIEWER      // Read-only access
+  ADMIN // Full access to everything
+  MANAGER // Can manage inventory, pricing, users (except admins)
+  STAFF // Can view and update inventory, cannot manage users or critical settings
+  TECHNICIAN // Can update repair status, view assigned repairs
+  VIEWER // Read-only access
 }
 
 // Vendor/Client Management (people selling equipment to Keysers)
 model Vendor {
-  id              String    @id @default(cuid())
-  name            String
-  email           String?
-  phone           String?
-  address         String?
-  notes           String?
-  trustScore      Int       @default(50) // 0-100, affects auto-approval
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  createdById     String
-  createdBy       User      @relation("CreatedBy", fields: [createdById], references: [id])
-  
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  notes       String?
+  trustScore  Int      @default(50) // 0-100, affects auto-approval
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation("CreatedBy", fields: [createdById], references: [id])
+
   // Relations
-  equipment         Equipment[]
-  pendingPurchases  PendingPurchase[]
-  
+  equipment          Equipment[]
+  pendingPurchases   PendingPurchase[]
+  inspectionSessions InspectionSession[]
+
   @@map("vendors")
 }
 
 // Main Equipment/Inventory Table
 model Equipment {
-  id                String            @id @default(cuid())
-  sku               String            @unique // Auto-generated or manual
-  name              String
-  brand             String
-  model             String
-  category          EquipmentCategory
-  condition         EquipmentCondition
-  description       String?
-  serialNumber      String?
-  
+  id           String             @id @default(cuid())
+  sku          String             @unique // Auto-generated or manual
+  name         String
+  brand        String
+  model        String
+  category     EquipmentCategory
+  condition    EquipmentCondition
+  description  String?
+  serialNumber String?
+
   // Acquisition
-  acquisitionType   AcquisitionType
-  vendorId          String?
-  vendor            Vendor?           @relation(fields: [vendorId], references: [id])
-  acquiredAt        DateTime          @default(now())
-  purchasePrice     Decimal?          @db.Decimal(10, 2) // What we paid
-  consignmentRate   Decimal?          @db.Decimal(5, 2)  // Percentage for consignment
-  
+  acquisitionType AcquisitionType
+  vendorId        String?
+  vendor          Vendor?         @relation(fields: [vendorId], references: [id])
+  acquiredAt      DateTime        @default(now())
+  purchasePrice   Decimal?        @db.Decimal(10, 2) // What we paid
+  consignmentRate Decimal?        @db.Decimal(5, 2) // Percentage for consignment
+
   // Pricing
-  sellingPrice      Decimal           @db.Decimal(10, 2)
-  costPrice         Decimal?          @db.Decimal(10, 2)
-  woocommerceId     String?           // WooCommerce product ID
-  syncedToWoo       Boolean           @default(false)
-  lastSyncedAt      DateTime?
-  
+  sellingPrice  Decimal   @db.Decimal(10, 2)
+  costPrice     Decimal?  @db.Decimal(10, 2)
+  woocommerceId String? // WooCommerce product ID
+  syncedToWoo   Boolean   @default(false)
+  lastSyncedAt  DateTime?
+
   // Status
-  status            EquipmentStatus   @default(PENDING_INSPECTION)
-  location          String?           // Physical location in store/warehouse
-  
+  status   EquipmentStatus @default(PENDING_INSPECTION)
+  location String? // Physical location in store/warehouse
+
   // Repair tracking
-  inRepair          Boolean           @default(false)
-  repairHistory     RepairLog[]
-  
+  inRepair      Boolean     @default(false)
+  repairHistory RepairLog[]
+
   // Media
-  images            String[]          // Array of image URLs
-  
+  images String[] // Array of image URLs
+
   // Metadata
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  createdById       String
-  createdBy         User              @relation("CreatedBy", fields: [createdById], references: [id])
-  lastUpdatedById   String?
-  lastUpdatedBy     User?             @relation("UpdatedBy", fields: [lastUpdatedById], references: [id])
-  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdById     String
+  createdBy       User     @relation("CreatedBy", fields: [createdById], references: [id])
+  lastUpdatedById String?
+  lastUpdatedBy   User?    @relation("UpdatedBy", fields: [lastUpdatedById], references: [id])
+
   // Relations
-  priceHistory      PriceHistory[]
-  
+  priceHistory PriceHistory[]
+
   @@map("equipment")
 }
 
@@ -148,56 +156,56 @@ enum EquipmentCondition {
 
 enum AcquisitionType {
   PURCHASED_OUTRIGHT // Bought from customer
-  CONSIGNMENT        // On consignment from customer
-  TRADE_IN           // Traded in by customer
-  SUPPLIER           // From regular supplier
+  CONSIGNMENT // On consignment from customer
+  TRADE_IN // Traded in by customer
+  SUPPLIER // From regular supplier
 }
 
 enum EquipmentStatus {
-  PENDING_INSPECTION    // Just received, needs inspection
-  INSPECTED            // Inspected, ready for pricing
-  IN_REPAIR            // Sent to technician
-  REPAIR_COMPLETED     // Back from repair, needs re-inspection
-  READY_FOR_SALE       // Listed and available
-  RESERVED             // Customer reserved
-  SOLD                 // Sold
-  RETURNED_TO_VENDOR   // Consignment returned
-  RETIRED              // No longer selling
+  PENDING_INSPECTION // Just received, needs inspection
+  INSPECTED // Inspected, ready for pricing
+  IN_REPAIR // Sent to technician
+  REPAIR_COMPLETED // Back from repair, needs re-inspection
+  READY_FOR_SALE // Listed and available
+  RESERVED // Customer reserved
+  SOLD // Sold
+  RETURNED_TO_VENDOR // Consignment returned
+  RETIRED // No longer selling
 }
 
 // Price Change History
 model PriceHistory {
-  id              String    @id @default(cuid())
-  equipmentId     String
-  equipment       Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  oldPrice        Decimal   @db.Decimal(10, 2)
-  newPrice        Decimal   @db.Decimal(10, 2)
-  reason          String?
-  changedAt       DateTime  @default(now())
-  changedById     String
-  changedBy       User      @relation("ChangedBy", fields: [changedById], references: [id])
-  
+  id          String    @id @default(cuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  oldPrice    Decimal   @db.Decimal(10, 2)
+  newPrice    Decimal   @db.Decimal(10, 2)
+  reason      String?
+  changedAt   DateTime  @default(now())
+  changedById String
+  changedBy   User      @relation("ChangedBy", fields: [changedById], references: [id])
+
   @@map("price_history")
 }
 
 // Repair Tracking
 model RepairLog {
-  id              String       @id @default(cuid())
-  equipmentId     String
-  equipment       Equipment    @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  technicianName  String
-  issue           String
-  notes           String?
-  estimatedCost   Decimal?     @db.Decimal(10, 2)
-  actualCost      Decimal?     @db.Decimal(10, 2)
-  status          RepairStatus @default(SENT_TO_TECH)
-  sentAt          DateTime     @default(now())
-  completedAt     DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  createdById     String
-  createdBy       User         @relation("CreatedBy", fields: [createdById], references: [id])
-  
+  id             String       @id @default(cuid())
+  equipmentId    String
+  equipment      Equipment    @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  technicianName String
+  issue          String
+  notes          String?
+  estimatedCost  Decimal?     @db.Decimal(10, 2)
+  actualCost     Decimal?     @db.Decimal(10, 2)
+  status         RepairStatus @default(SENT_TO_TECH)
+  sentAt         DateTime     @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  createdById    String
+  createdBy      User         @relation("CreatedBy", fields: [createdById], references: [id])
+
   @@map("repair_logs")
 }
 
@@ -211,16 +219,16 @@ enum RepairStatus {
 
 // Activity/Audit Log
 model ActivityLog {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  action      String   // e.g., "CREATED_EQUIPMENT", "UPDATED_PRICE", "CHANGED_STATUS"
-  entityType  String   // e.g., "EQUIPMENT", "VENDOR", "USER"
-  entityId    String
-  details     String?  // JSON string with additional details
-  ipAddress   String?
-  createdAt   DateTime @default(now())
-  
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String // e.g., "CREATED_EQUIPMENT", "UPDATED_PRICE", "CHANGED_STATUS"
+  entityType String // e.g., "EQUIPMENT", "VENDOR", "USER"
+  entityId   String
+  details    String? // JSON string with additional details
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
   @@index([userId])
   @@index([entityType, entityId])
   @@map("activity_logs")
@@ -228,80 +236,80 @@ model ActivityLog {
 
 // WooCommerce Sync Settings
 model WooSettings {
-  id              String   @id @default(cuid())
-  storeUrl        String
-  consumerKey     String
-  consumerSecret  String
-  autoSync        Boolean  @default(false)
-  syncInterval    Int      @default(60) // minutes
-  lastSyncAt      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  id             String    @id @default(cuid())
+  storeUrl       String
+  consumerKey    String
+  consumerSecret String
+  autoSync       Boolean   @default(false)
+  syncInterval   Int       @default(60) // minutes
+  lastSyncAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
   @@map("woo_settings")
 }
 
 // Incoming Gear / Purchase Approval Workflow
 model PendingPurchase {
-  id                      String          @id @default(cuid())
-  vendorId                String?
-  vendor                  Vendor?         @relation(fields: [vendorId], references: [id])
-  customerName            String
-  customerPhone           String
-  customerEmail           String?
-  whatsappConversationId  String?
-  totalQuoteAmount        Decimal?        @db.Decimal(10, 2)
-  status                  PurchaseStatus  @default(PENDING_REVIEW)
-  
+  id                     String         @id @default(cuid())
+  vendorId               String?
+  vendor                 Vendor?        @relation(fields: [vendorId], references: [id])
+  customerName           String
+  customerPhone          String
+  customerEmail          String?
+  whatsappConversationId String?
+  totalQuoteAmount       Decimal?       @db.Decimal(10, 2)
+  status                 PurchaseStatus @default(PENDING_REVIEW)
+
   // Bot interaction
-  botQuoteAcceptedAt      DateTime?
-  botConversationData     String?         // JSON data from bot
-  
+  botQuoteAcceptedAt  DateTime?
+  botConversationData String? // JSON data from bot
+
   // Review process
-  reviewedById            String?
-  reviewedBy              User?           @relation("ReviewedPurchases", fields: [reviewedById], references: [id])
-  reviewedAt              DateTime?
-  
+  reviewedById String?
+  reviewedBy   User?     @relation("ReviewedPurchases", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+
   // Approval/Rejection
-  approvedById            String?
-  approvedBy              User?           @relation("ApprovedPurchases", fields: [approvedById], references: [id])
-  approvedAt              DateTime?
-  rejectedReason          String?
-  
+  approvedById   String?
+  approvedBy     User?     @relation("ApprovedPurchases", fields: [approvedById], references: [id])
+  approvedAt     DateTime?
+  rejectedReason String?
+
   // Supplier Invoice
-  invoiceNumber           String?         @unique
-  invoiceTotal            Decimal?        @db.Decimal(10, 2)
-  invoiceEmailSentAt      DateTime?
-  invoiceAcceptToken      String?         @unique  // Unique token for client acceptance link
-  
+  invoiceNumber      String?   @unique
+  invoiceTotal       Decimal?  @db.Decimal(10, 2)
+  invoiceEmailSentAt DateTime?
+  invoiceAcceptToken String?   @unique // Unique token for client acceptance link
+
   // Client Details (captured after email acceptance)
-  clientDetailsSubmitted  Boolean         @default(false)
-  clientIdNumber          String?
-  clientAddress           String?
-  clientCity              String?
-  clientProvince          String?
-  clientPostalCode        String?
-  clientBankName          String?
-  clientAccountNumber     String?
-  clientBranchCode        String?
-  clientAccountType       String?
+  clientDetailsSubmitted   Boolean   @default(false)
+  clientIdNumber           String?
+  clientAddress            String?
+  clientCity               String?
+  clientProvince           String?
+  clientPostalCode         String?
+  clientBankName           String?
+  clientAccountNumber      String?
+  clientBranchCode         String?
+  clientAccountType        String?
   clientDetailsSubmittedAt DateTime?
-  
+
   // Payment
-  paymentAmount           Decimal?        @db.Decimal(10, 2)
-  paymentMethod           String?
-  paymentReceivedAt       DateTime?
-  
+  paymentAmount     Decimal?  @db.Decimal(10, 2)
+  paymentMethod     String?
+  paymentReceivedAt DateTime?
+
   // Notes
-  notes                   String?
-  
+  notes String?
+
   // Relations
-  items                   PendingItem[]
-  
+  items PendingItem[]
+
   // Timestamps
-  createdAt               DateTime        @default(now())
-  updatedAt               DateTime        @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([status])
   @@index([customerPhone])
   @@index([whatsappConversationId])
@@ -310,59 +318,426 @@ model PendingPurchase {
 }
 
 enum PurchaseStatus {
-  PENDING_REVIEW      // Waiting for staff review
-  IN_REVIEW           // Being reviewed
-  PENDING_APPROVAL    // Reviewed, waiting for final approval
-  APPROVED            // Approved, ready to add to inventory
-  ADDED_TO_INVENTORY  // Successfully added to inventory
-  REJECTED            // Rejected, not purchasing
-  CANCELLED           // Customer cancelled
+  PENDING_REVIEW // Waiting for staff review
+  IN_REVIEW // Being reviewed
+  PENDING_APPROVAL // Reviewed, waiting for final approval
+  APPROVED // Approved, ready to add to inventory
+  ADDED_TO_INVENTORY // Successfully added to inventory
+  REJECTED // Rejected, not purchasing
+  CANCELLED // Customer cancelled
 }
 
 // Individual items in a pending purchase
 model PendingItem {
-  id                  String          @id @default(cuid())
-  pendingPurchaseId   String
-  pendingPurchase     PendingPurchase @relation(fields: [pendingPurchaseId], references: [id], onDelete: Cascade)
-  
+  id                String          @id @default(cuid())
+  pendingPurchaseId String
+  pendingPurchase   PendingPurchase @relation(fields: [pendingPurchaseId], references: [id], onDelete: Cascade)
+
   // Item details (from bot)
-  name                String
-  brand               String?
-  model               String?
-  category            String?
-  condition           String?
-  description         String?
-  serialNumber        String?
-  
+  name         String
+  brand        String?
+  model        String?
+  category     String?
+  condition    String?
+  description  String?
+  serialNumber String?
+
   // Pricing
-  botEstimatedPrice   Decimal?        @db.Decimal(10, 2)  // What bot estimated
-  proposedPrice       Decimal?        @db.Decimal(10, 2)  // What we propose to pay
-  finalPrice          Decimal?        @db.Decimal(10, 2)  // Final approved price
-  suggestedSellPrice  Decimal?        @db.Decimal(10, 2)  // Suggested selling price
-  
+  botEstimatedPrice  Decimal? @db.Decimal(10, 2) // What bot estimated
+  proposedPrice      Decimal? @db.Decimal(10, 2) // What we propose to pay
+  finalPrice         Decimal? @db.Decimal(10, 2) // Final approved price
+  suggestedSellPrice Decimal? @db.Decimal(10, 2) // Suggested selling price
+
   // Status
-  status              ItemStatus      @default(PENDING)
-  reviewNotes         String?
-  
+  status      ItemStatus @default(PENDING)
+  reviewNotes String?
+
   // Media
-  imageUrls           String[]        // Photos from customer
-  
+  imageUrls String[] // Photos from customer
+
   // Link to created equipment (after approval)
-  equipmentId         String?
-  
+  equipmentId String?
+
   // Timestamps
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([pendingPurchaseId])
   @@index([status])
   @@map("pending_items")
 }
 
 enum ItemStatus {
-  PENDING           // Waiting for review
-  APPROVED          // Approved to purchase
-  REJECTED          // Not purchasing this item
-  PRICE_ADJUSTED    // Price has been adjusted
+  PENDING // Waiting for review
+  APPROVED // Approved to purchase
+  REJECTED // Not purchasing this item
+  PRICE_ADJUSTED // Price has been adjusted
   ADDED_TO_INVENTORY // Successfully added to inventory
+}
+
+// ========================================
+// GEAR VERIFICATION / INSPECTION SYSTEM
+// ========================================
+
+// Canonical Product Catalog - master list of all products we deal with
+model Product {
+  id          String      @id @default(cuid())
+  name        String // e.g., "Canon EOS R5"
+  brand       String // e.g., "Canon"
+  model       String // e.g., "EOS R5"
+  variant     String? // e.g., "Body Only", "Kit with 24-105mm"
+  productType ProductType // Category: CAMERA_BODY, LENS, etc.
+
+  // Base Pricing Ranges (for pricing calculation)
+  buyPriceMin     Decimal @db.Decimal(10, 2) // Minimum buy price
+  buyPriceMax     Decimal @db.Decimal(10, 2) // Maximum buy price
+  consignPriceMin Decimal @db.Decimal(10, 2) // Minimum consignment price
+  consignPriceMax Decimal @db.Decimal(10, 2) // Maximum consignment price
+
+  // Metadata
+  description    String?
+  specifications String? // JSON string with specs
+  imageUrl       String?
+  active         Boolean @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  accessories       AccessoryTemplate[]
+  knownIssues       KnownIssue[]
+  questionTemplates ProductQuestionTemplate[]
+  verifiedItems     VerifiedGearItem[]
+
+  @@unique([brand, model, variant])
+  @@index([productType])
+  @@index([brand])
+  @@map("products")
+}
+
+enum ProductType {
+  CAMERA_BODY
+  LENS
+  FLASH
+  TRIPOD
+  BAG
+  MEMORY_CARD
+  BATTERY
+  CHARGER
+  FILTER
+  VIDEO_CAMERA
+  DRONE
+  GIMBAL
+  MICROPHONE
+  LIGHTING
+  STUDIO_EQUIPMENT
+  ACCESSORIES
+  OTHER
+}
+
+// Inspection Session - groups items being inspected together
+model InspectionSession {
+  id                String        @id @default(cuid())
+  sessionName       String // e.g., "Shipment from John Doe - 2024-01-15"
+  shipmentReference String? // Tracking number, invoice ref, etc.
+  vendorId          String?
+  vendor            Vendor?       @relation(fields: [vendorId], references: [id])
+  status            SessionStatus @default(IN_PROGRESS)
+
+  // Metadata
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+  createdById String
+  createdBy   User      @relation("CreatedBy", fields: [createdById], references: [id])
+
+  // Relations
+  incomingItems IncomingGearItem[]
+
+  @@index([status])
+  @@index([vendorId])
+  @@map("inspection_sessions")
+}
+
+enum SessionStatus {
+  IN_PROGRESS // Currently being inspected
+  COMPLETED // All items inspected and approved
+  PARTIALLY_COMPLETED // Some items approved, some rejected
+  ON_HOLD // Paused for some reason
+  CANCELLED // Session cancelled
+}
+
+// Incoming Gear Item - client-submitted information (before verification)
+model IncomingGearItem {
+  id        String            @id @default(cuid())
+  sessionId String
+  session   InspectionSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Client-submitted info
+  clientName         String // What client called it
+  clientBrand        String?
+  clientModel        String?
+  clientDescription  String?
+  clientSerialNumber String?
+  clientCondition    String?
+  clientImages       String[] // URLs to client-provided photos
+
+  // Status
+  inspectionStatus InspectionStatus @default(UNVERIFIED)
+
+  // Relations
+  verifiedItem VerifiedGearItem? // One-to-one after verification
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionId])
+  @@index([inspectionStatus])
+  @@map("incoming_gear_items")
+}
+
+enum InspectionStatus {
+  UNVERIFIED // Not yet inspected
+  IN_PROGRESS // Currently being inspected
+  VERIFIED // Inspected and verified
+  APPROVED // Approved and locked
+  REJECTED // Rejected, won't purchase
+  REOPENED // Reopened by admin after approval
+}
+
+// Verified Gear Item - after staff identifies and verifies the product
+model VerifiedGearItem {
+  id             String           @id @default(cuid())
+  incomingItemId String           @unique
+  incomingItem   IncomingGearItem @relation(fields: [incomingItemId], references: [id], onDelete: Cascade)
+
+  // Canonical Product Identification
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  // Verified Details
+  serialNumber      String?
+  verifiedCondition VerifiedCondition
+  generalNotes      String? // General issues/notes
+
+  // Verification status
+  verifiedAt   DateTime?
+  verifiedById String?
+  verifiedBy   User?     @relation("VerifiedBy", fields: [verifiedById], references: [id])
+
+  // Approval (locks the record)
+  approvedAt   DateTime?
+  approvedById String?
+  approvedBy   User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
+  locked       Boolean   @default(false)
+
+  // Reopen tracking (admin only)
+  reopenedAt   DateTime?
+  reopenedById String?
+  reopenedBy   User?     @relation("ReopenedBy", fields: [reopenedById], references: [id])
+  reopenReason String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  answers         VerifiedAnswer[]
+  accessories     VerifiedAccessory[]
+  pricingSnapshot PricingSnapshot?
+  priceOverride   PriceOverride?
+
+  @@index([productId])
+  @@index([verifiedById])
+  @@index([approvedById])
+  @@map("verified_gear_items")
+}
+
+enum VerifiedCondition {
+  LIKE_NEW // Essentially new, no signs of use
+  EXCELLENT // Minimal signs of use, fully functional
+  VERY_GOOD // Light signs of use, fully functional
+  GOOD // Moderate signs of use, fully functional
+  WORN // Heavy signs of use but functional
+}
+
+// Question Template - defines questions per product type or specific product
+model ProductQuestionTemplate {
+  id          String       @id @default(cuid())
+  productId   String? // If null, applies to all products of this type
+  product     Product?     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productType ProductType? // If productId is null, filter by type
+
+  // Question details
+  question      String // e.g., "Does the shutter work smoothly?"
+  questionOrder Int // Display order
+  isRequired    Boolean @default(true)
+  category      String? // e.g., "Functionality", "Physical Condition"
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([productType])
+  @@map("question_templates")
+}
+
+// Verified Answer - staff responses to questions
+model VerifiedAnswer {
+  id             String           @id @default(cuid())
+  verifiedItemId String
+  verifiedItem   VerifiedGearItem @relation(fields: [verifiedItemId], references: [id], onDelete: Cascade)
+
+  // Question reference
+  questionText String // Store question text for audit trail
+  answer       AnswerType
+  notes        String? // Additional notes if needed
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([verifiedItemId])
+  @@map("verified_answers")
+}
+
+enum AnswerType {
+  YES
+  NO
+  NOT_TESTED
+}
+
+// Accessory Template - expected accessories for a product
+model AccessoryTemplate {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Accessory details
+  accessoryName String // e.g., "Battery Charger", "Lens Cap"
+  isRequired    Boolean  @default(false) // Is this accessory expected?
+  penaltyAmount Decimal? @db.Decimal(10, 2) // Optional: deduct from price if missing
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@map("accessory_templates")
+}
+
+// Verified Accessory - actual accessories present/missing
+model VerifiedAccessory {
+  id             String           @id @default(cuid())
+  verifiedItemId String
+  verifiedItem   VerifiedGearItem @relation(fields: [verifiedItemId], references: [id], onDelete: Cascade)
+
+  // Accessory details
+  accessoryName String
+  isPresent     Boolean @default(false)
+  notes         String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([verifiedItemId])
+  @@map("verified_accessories")
+}
+
+// Known Issue - common issues for specific products
+model KnownIssue {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Issue details
+  issueName          String // e.g., "Rubber grip deterioration"
+  issueDescription   String?
+  autoInjectQuestion Boolean @default(true) // Auto-add question during inspection
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@map("known_issues")
+}
+
+// Pricing Snapshot - automatically computed pricing
+model PricingSnapshot {
+  id             String           @id @default(cuid())
+  verifiedItemId String           @unique
+  verifiedItem   VerifiedGearItem @relation(fields: [verifiedItemId], references: [id], onDelete: Cascade)
+
+  // Base prices from Product
+  baseBuyMin     Decimal @db.Decimal(10, 2)
+  baseBuyMax     Decimal @db.Decimal(10, 2)
+  baseConsignMin Decimal @db.Decimal(10, 2)
+  baseConsignMax Decimal @db.Decimal(10, 2)
+
+  // Condition multiplier applied
+  conditionMultiplier Decimal @db.Decimal(5, 4) // e.g., 0.9500
+
+  // Computed prices (auto)
+  computedBuyPrice     Decimal @db.Decimal(10, 2)
+  computedConsignPrice Decimal @db.Decimal(10, 2)
+
+  // Penalties applied (if any)
+  accessoryPenalty Decimal @default(0) @db.Decimal(10, 2)
+  totalPenalty     Decimal @default(0) @db.Decimal(10, 2)
+
+  // Final auto prices (after penalties)
+  finalBuyPrice     Decimal @db.Decimal(10, 2)
+  finalConsignPrice Decimal @db.Decimal(10, 2)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("pricing_snapshots")
+}
+
+// Price Override - manual override with audit trail
+model PriceOverride {
+  id             String           @id @default(cuid())
+  verifiedItemId String           @unique
+  verifiedItem   VerifiedGearItem @relation(fields: [verifiedItemId], references: [id], onDelete: Cascade)
+
+  // Override values (null means use auto)
+  overrideBuyPrice     Decimal? @db.Decimal(10, 2)
+  overrideConsignPrice Decimal? @db.Decimal(10, 2)
+
+  // Required reason
+  overrideReason OverrideReason
+  notes          String? // Optional additional notes
+
+  // Audit
+  overriddenAt   DateTime @default(now())
+  overriddenById String
+  overriddenBy   User     @relation("OverriddenBy", fields: [overriddenById], references: [id])
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([verifiedItemId])
+  @@index([overriddenById])
+  @@map("price_overrides")
+}
+
+enum OverrideReason {
+  MARKET_RESEARCH // Competitor pricing
+  DEMAND_HIGH // High demand for this item
+  DEMAND_LOW // Low demand
+  CONDITION_EXCEPTION // Condition better/worse than standard
+  CLIENT_NEGOTIATION // Negotiated with client
+  BULK_DISCOUNT // Part of bulk purchase
+  DAMAGED_NOT_OBVIOUS // Hidden damage found
+  RARE_ITEM // Rare/collectible item
+  OTHER // Other reason (must provide notes)
 }
