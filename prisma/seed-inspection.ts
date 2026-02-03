@@ -62,13 +62,13 @@ async function main() {
 
   // Lenses
   const canonRF2470 = await prisma.product.upsert({
-    where: { brand_model_variant: { brand: "Canon", model: "RF 24-70mm f/2.8L IS USM", variant: null } },
+    where: { brand_model_variant: { brand: "Canon", model: "RF 24-70mm f/2.8L IS USM", variant: "Standard" } },
     update: {},
     create: {
       name: "Canon RF 24-70mm f/2.8L IS USM",
       brand: "Canon",
       model: "RF 24-70mm f/2.8L IS USM",
-      variant: null,
+      variant: "Standard",
       productType: ProductType.LENS,
       buyPriceMin: 18000,
       buyPriceMax: 24000,
@@ -86,13 +86,13 @@ async function main() {
   })
 
   const sony70200 = await prisma.product.upsert({
-    where: { brand_model_variant: { brand: "Sony", model: "FE 70-200mm f/2.8 GM OSS II", variant: null } },
+    where: { brand_model_variant: { brand: "Sony", model: "FE 70-200mm f/2.8 GM OSS II", variant: "Standard" } },
     update: {},
     create: {
       name: "Sony FE 70-200mm f/2.8 GM OSS II",
       brand: "Sony",
       model: "FE 70-200mm f/2.8 GM OSS II",
-      variant: null,
+      variant: "Standard",
       productType: ProductType.LENS,
       buyPriceMin: 22000,
       buyPriceMax: 28000,
