@@ -1,0 +1,368 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  password      String
+  role          UserRole  @default(STAFF)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relations
+  createdVendors        Vendor[]          @relation("CreatedBy")
+  createdEquipment      Equipment[]       @relation("CreatedBy")
+  updatedEquipment      Equipment[]       @relation("UpdatedBy")
+  priceChanges          PriceHistory[]    @relation("ChangedBy")
+  repairLogs            RepairLog[]       @relation("CreatedBy")
+  activityLogs          ActivityLog[]
+  reviewedPurchases     PendingPurchase[] @relation("ReviewedPurchases")
+  approvedPurchases     PendingPurchase[] @relation("ApprovedPurchases")
+  
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN       // Full access to everything
+  MANAGER     // Can manage inventory, pricing, users (except admins)
+  STAFF       // Can view and update inventory, cannot manage users or critical settings
+  TECHNICIAN  // Can update repair status, view assigned repairs
+  VIEWER      // Read-only access
+}
+
+// Vendor/Client Management (people selling equipment to Keysers)
+model Vendor {
+  id              String    @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  address         String?
+  notes           String?
+  trustScore      Int       @default(50) // 0-100, affects auto-approval
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdById     String
+  createdBy       User      @relation("CreatedBy", fields: [createdById], references: [id])
+  
+  // Relations
+  equipment         Equipment[]
+  pendingPurchases  PendingPurchase[]
+  
+  @@map("vendors")
+}
+
+// Main Equipment/Inventory Table
+model Equipment {
+  id                String            @id @default(cuid())
+  sku               String            @unique // Auto-generated or manual
+  name              String
+  brand             String
+  model             String
+  category          EquipmentCategory
+  condition         EquipmentCondition
+  description       String?
+  serialNumber      String?
+  
+  // Acquisition
+  acquisitionType   AcquisitionType
+  vendorId          String?
+  vendor            Vendor?           @relation(fields: [vendorId], references: [id])
+  acquiredAt        DateTime          @default(now())
+  purchasePrice     Decimal?          @db.Decimal(10, 2) // What we paid
+  consignmentRate   Decimal?          @db.Decimal(5, 2)  // Percentage for consignment
+  
+  // Pricing
+  sellingPrice      Decimal           @db.Decimal(10, 2)
+  costPrice         Decimal?          @db.Decimal(10, 2)
+  woocommerceId     String?           // WooCommerce product ID
+  syncedToWoo       Boolean           @default(false)
+  lastSyncedAt      DateTime?
+  
+  // Status
+  status            EquipmentStatus   @default(PENDING_INSPECTION)
+  location          String?           // Physical location in store/warehouse
+  
+  // Repair tracking
+  inRepair          Boolean           @default(false)
+  repairHistory     RepairLog[]
+  
+  // Media
+  images            String[]          // Array of image URLs
+  
+  // Metadata
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdById       String
+  createdBy         User              @relation("CreatedBy", fields: [createdById], references: [id])
+  lastUpdatedById   String?
+  lastUpdatedBy     User?             @relation("UpdatedBy", fields: [lastUpdatedById], references: [id])
+  
+  // Relations
+  priceHistory      PriceHistory[]
+  
+  @@map("equipment")
+}
+
+enum EquipmentCategory {
+  CAMERA_BODY
+  LENS
+  FLASH
+  TRIPOD
+  BAG
+  MEMORY_CARD
+  BATTERY
+  CHARGER
+  FILTER
+  VIDEO_CAMERA
+  DRONE
+  GIMBAL
+  MICROPHONE
+  LIGHTING
+  STUDIO_EQUIPMENT
+  ACCESSORIES
+  OTHER
+}
+
+enum EquipmentCondition {
+  NEW
+  MINT
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  FOR_PARTS
+}
+
+enum AcquisitionType {
+  PURCHASED_OUTRIGHT // Bought from customer
+  CONSIGNMENT        // On consignment from customer
+  TRADE_IN           // Traded in by customer
+  SUPPLIER           // From regular supplier
+}
+
+enum EquipmentStatus {
+  PENDING_INSPECTION    // Just received, needs inspection
+  INSPECTED            // Inspected, ready for pricing
+  IN_REPAIR            // Sent to technician
+  REPAIR_COMPLETED     // Back from repair, needs re-inspection
+  READY_FOR_SALE       // Listed and available
+  RESERVED             // Customer reserved
+  SOLD                 // Sold
+  RETURNED_TO_VENDOR   // Consignment returned
+  RETIRED              // No longer selling
+}
+
+// Price Change History
+model PriceHistory {
+  id              String    @id @default(cuid())
+  equipmentId     String
+  equipment       Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  oldPrice        Decimal   @db.Decimal(10, 2)
+  newPrice        Decimal   @db.Decimal(10, 2)
+  reason          String?
+  changedAt       DateTime  @default(now())
+  changedById     String
+  changedBy       User      @relation("ChangedBy", fields: [changedById], references: [id])
+  
+  @@map("price_history")
+}
+
+// Repair Tracking
+model RepairLog {
+  id              String       @id @default(cuid())
+  equipmentId     String
+  equipment       Equipment    @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  technicianName  String
+  issue           String
+  notes           String?
+  estimatedCost   Decimal?     @db.Decimal(10, 2)
+  actualCost      Decimal?     @db.Decimal(10, 2)
+  status          RepairStatus @default(SENT_TO_TECH)
+  sentAt          DateTime     @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  createdById     String
+  createdBy       User         @relation("CreatedBy", fields: [createdById], references: [id])
+  
+  @@map("repair_logs")
+}
+
+enum RepairStatus {
+  SENT_TO_TECH
+  IN_PROGRESS
+  COMPLETED
+  RETURNED
+  CANCELLED
+}
+
+// Activity/Audit Log
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  action      String   // e.g., "CREATED_EQUIPMENT", "UPDATED_PRICE", "CHANGED_STATUS"
+  entityType  String   // e.g., "EQUIPMENT", "VENDOR", "USER"
+  entityId    String
+  details     String?  // JSON string with additional details
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
+}
+
+// WooCommerce Sync Settings
+model WooSettings {
+  id              String   @id @default(cuid())
+  storeUrl        String
+  consumerKey     String
+  consumerSecret  String
+  autoSync        Boolean  @default(false)
+  syncInterval    Int      @default(60) // minutes
+  lastSyncAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("woo_settings")
+}
+
+// Incoming Gear / Purchase Approval Workflow
+model PendingPurchase {
+  id                      String          @id @default(cuid())
+  vendorId                String?
+  vendor                  Vendor?         @relation(fields: [vendorId], references: [id])
+  customerName            String
+  customerPhone           String
+  customerEmail           String?
+  whatsappConversationId  String?
+  totalQuoteAmount        Decimal?        @db.Decimal(10, 2)
+  status                  PurchaseStatus  @default(PENDING_REVIEW)
+  
+  // Bot interaction
+  botQuoteAcceptedAt      DateTime?
+  botConversationData     String?         // JSON data from bot
+  
+  // Review process
+  reviewedById            String?
+  reviewedBy              User?           @relation("ReviewedPurchases", fields: [reviewedById], references: [id])
+  reviewedAt              DateTime?
+  
+  // Approval/Rejection
+  approvedById            String?
+  approvedBy              User?           @relation("ApprovedPurchases", fields: [approvedById], references: [id])
+  approvedAt              DateTime?
+  rejectedReason          String?
+  
+  // Supplier Invoice
+  invoiceNumber           String?         @unique
+  invoiceTotal            Decimal?        @db.Decimal(10, 2)
+  invoiceEmailSentAt      DateTime?
+  invoiceAcceptToken      String?         @unique  // Unique token for client acceptance link
+  
+  // Client Details (captured after email acceptance)
+  clientDetailsSubmitted  Boolean         @default(false)
+  clientIdNumber          String?
+  clientAddress           String?
+  clientCity              String?
+  clientProvince          String?
+  clientPostalCode        String?
+  clientBankName          String?
+  clientAccountNumber     String?
+  clientBranchCode        String?
+  clientAccountType       String?
+  clientDetailsSubmittedAt DateTime?
+  
+  // Payment
+  paymentAmount           Decimal?        @db.Decimal(10, 2)
+  paymentMethod           String?
+  paymentReceivedAt       DateTime?
+  
+  // Notes
+  notes                   String?
+  
+  // Relations
+  items                   PendingItem[]
+  
+  // Timestamps
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  
+  @@index([status])
+  @@index([customerPhone])
+  @@index([whatsappConversationId])
+  @@index([invoiceAcceptToken])
+  @@map("pending_purchases")
+}
+
+enum PurchaseStatus {
+  PENDING_REVIEW      // Waiting for staff review
+  IN_REVIEW           // Being reviewed
+  PENDING_APPROVAL    // Reviewed, waiting for final approval
+  APPROVED            // Approved, ready to add to inventory
+  ADDED_TO_INVENTORY  // Successfully added to inventory
+  REJECTED            // Rejected, not purchasing
+  CANCELLED           // Customer cancelled
+}
+
+// Individual items in a pending purchase
+model PendingItem {
+  id                  String          @id @default(cuid())
+  pendingPurchaseId   String
+  pendingPurchase     PendingPurchase @relation(fields: [pendingPurchaseId], references: [id], onDelete: Cascade)
+  
+  // Item details (from bot)
+  name                String
+  brand               String?
+  model               String?
+  category            String?
+  condition           String?
+  description         String?
+  serialNumber        String?
+  
+  // Pricing
+  botEstimatedPrice   Decimal?        @db.Decimal(10, 2)  // What bot estimated
+  proposedPrice       Decimal?        @db.Decimal(10, 2)  // What we propose to pay
+  finalPrice          Decimal?        @db.Decimal(10, 2)  // Final approved price
+  suggestedSellPrice  Decimal?        @db.Decimal(10, 2)  // Suggested selling price
+  
+  // Status
+  status              ItemStatus      @default(PENDING)
+  reviewNotes         String?
+  
+  // Media
+  imageUrls           String[]        // Photos from customer
+  
+  // Link to created equipment (after approval)
+  equipmentId         String?
+  
+  // Timestamps
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  
+  @@index([pendingPurchaseId])
+  @@index([status])
+  @@map("pending_items")
+}
+
+enum ItemStatus {
+  PENDING           // Waiting for review
+  APPROVED          // Approved to purchase
+  REJECTED          // Not purchasing this item
+  PRICE_ADJUSTED    // Price has been adjusted
+  ADDED_TO_INVENTORY // Successfully added to inventory
+}
