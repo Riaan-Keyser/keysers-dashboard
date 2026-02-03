@@ -35,3 +35,41 @@ export async function PUT(
     return NextResponse.json({ error: "Failed to update" }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { id } = await params
+
+    // Delete the pending purchase (cascade will delete all items)
+    await prisma.pendingPurchase.delete({
+      where: { id }
+    })
+
+    // Log the deletion
+    await prisma.activityLog.create({
+      data: {
+        userId: session.user.id,
+        action: "DELETED_PENDING_PURCHASE",
+        entityType: "PENDING_PURCHASE",
+        entityId: id,
+        details: JSON.stringify({
+          deletedBy: session.user.name,
+          deletedAt: new Date().toISOString()
+        })
+      }
+    })
+
+    return NextResponse.json({ success: true, message: "Purchase deleted successfully" })
+  } catch (error) {
+    console.error("DELETE /api/incoming-gear/[id] error:", error)
+    return NextResponse.json({ error: "Failed to delete purchase" }, { status: 500 })
+  }
+}

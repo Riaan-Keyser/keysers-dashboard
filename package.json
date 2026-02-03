@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "pkill -f 'next-server' || true && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "kill-dev": "pkill -f 'next-server' && echo 'Killed all Next.js dev servers' || echo 'No dev servers running'",
+    "check-port": "sudo ss -tlnp | grep :3000 || echo 'Port 3000 is free'",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",

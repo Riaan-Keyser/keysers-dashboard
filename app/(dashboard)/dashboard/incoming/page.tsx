@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { PackagePlus, ChevronDown, ChevronRight, Check, X, Edit, DollarSign, ZoomIn } from "lucide-react"
+import { PackagePlus, ChevronDown, ChevronRight, Check, X, Edit, DollarSign, ZoomIn, Trash2, Phone, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,6 +39,34 @@ interface PendingPurchase {
   createdAt: string
   items: PendingItem[]
   vendor: { id: string; name: string } | null
+}
+
+const formatPhoneNumber = (phone: string): string => {
+  // Remove all non-digit characters except +
+  const cleaned = phone.replace(/[^\d+]/g, '')
+  
+  // Check if it's a South African number
+  if (cleaned.startsWith('+27') || cleaned.startsWith('27')) {
+    const number = cleaned.startsWith('+') ? cleaned.slice(3) : cleaned.slice(2)
+    
+    // Format as +27 XX XXX XXXX
+    if (number.length === 9) {
+      return `+27 ${number.slice(0, 2)} ${number.slice(2, 5)} ${number.slice(5)}`
+    }
+  }
+  
+  // Return original if not matching expected format
+  return phone
+}
+
+const formatPrice = (price: number | null): string => {
+  if (!price) return "-"
+  
+  // Format number with space as thousands separator (South African format)
+  const rounded = Math.round(price)
+  const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  
+  return `R${formatted}`
 }
 
 export default function IncomingGearPage() {
@@ -159,6 +187,30 @@ export default function IncomingGearPage() {
     }
   }
 
+  const handleDeletePurchase = async (purchaseId: string, customerName: string, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    
+    if (!confirm(`Are you sure you want to delete all items for ${customerName}?\n\nThis action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/incoming-gear/${purchaseId}`, {
+        method: "DELETE"
+      })
+
+      if (response.ok) {
+        fetchPurchases()
+      } else {
+        alert("Failed to delete purchase")
+      }
+    } catch (error) {
+      console.error("Failed to delete purchase:", error)
+      alert("Failed to delete purchase")
+    }
+  }
+
   const openLightbox = (images: string[], index: number) => {
     setLightboxImages(images)
     setLightboxIndex(index)
@@ -255,7 +307,7 @@ export default function IncomingGearPage() {
         <Card className="p-4">
           <p className="text-sm text-gray-500">Total Value</p>
           <p className="text-2xl font-bold">
-            R {purchases.reduce((sum, p) => sum + (p.totalQuoteAmount || 0), 0).toLocaleString()}
+            {formatPrice(purchases.reduce((sum, p) => sum + (p.totalQuoteAmount || 0), 0))}
           </p>
         </Card>
       </div>
@@ -287,12 +339,12 @@ export default function IncomingGearPage() {
             return (
               <Card key={purchase.id} className="overflow-hidden">
                 {/* Purchase Header */}
-                <button
-                  onClick={() => toggleExpand(purchase.id)}
-                  className="w-full p-4 hover:bg-gray-50 transition-colors"
-                >
+                <div className="w-full p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => toggleExpand(purchase.id)}
+                      className="flex items-center gap-4 flex-1"
+                    >
                       {isExpanded ? (
                         <ChevronDown className="h-5 w-5 text-gray-400" />
                       ) : (
@@ -300,14 +352,25 @@ export default function IncomingGearPage() {
                       )}
                       <div className="text-left">
                         <h3 className="font-semibold text-gray-900">{purchase.customerName}</h3>
-                        <p className="text-sm text-gray-500">{purchase.customerPhone}</p>
+                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5" />
+                            <span>{formatPhoneNumber(purchase.customerPhone)}</span>
+                          </div>
+                          {purchase.customerEmail && (
+                            <div className="flex items-center gap-1.5">
+                              <Mail className="h-3.5 w-3.5" />
+                              <span>{purchase.customerEmail}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-sm font-medium">{purchase.items.length} items</p>
                         {purchase.totalQuoteAmount && (
-                          <p className="text-sm text-gray-500">R {purchase.totalQuoteAmount.toLocaleString()}</p>
+                          <p className="text-sm text-gray-500">{formatPrice(purchase.totalQuoteAmount)}</p>
                         )}
                       </div>
                       <Badge variant={getStatusColor(purchase.status)}>
@@ -318,85 +381,109 @@ export default function IncomingGearPage() {
                       <span className="text-xs text-gray-400">
                         {new Date(purchase.createdAt).toLocaleDateString()}
                       </span>
+                      <button
+                        onClick={(e) => handleDeletePurchase(purchase.id, purchase.customerName, e)}
+                        className="p-1 hover:bg-red-50 rounded transition-colors"
+                        title="Delete this customer and all their items"
+                      >
+                        <X className="h-5 w-5 text-red-600 hover:text-red-700" />
+                      </button>
                     </div>
                   </div>
-                </button>
+                </div>
 
                 {/* Expanded Items */}
                 {isExpanded && (
-                  <div className="border-t bg-gray-50 p-6">
-                    <div className="space-y-4">
+                  <div className="border-t bg-gray-50 p-3">
+                    {/* Column Headers */}
+                    <div className="grid grid-cols-[minmax(500px,1fr)_110px_110px_110px_110px_110px_80px_minmax(280px,1fr)] gap-x-16 mb-3">
+                      <div className="justify-self-start"></div> {/* Empty for product name column */}
+                      <div className="text-center"></div> {/* Empty for status column */}
+                      <div className="text-sm text-gray-500 font-medium text-center w-full">Buy Low</div>
+                      <div className="text-sm text-gray-500 font-medium text-center w-full">Buy High</div>
+                      <div className="text-sm text-gray-500 font-medium text-center whitespace-nowrap w-full">Consignment Low</div>
+                      <div className="text-sm text-gray-500 font-medium text-center whitespace-nowrap w-full">Consignment High</div>
+                      <div className="text-center"></div> {/* Empty for image column */}
+                      <div className="justify-self-end"></div> {/* Empty for actions column */}
+                    </div>
+
+                    <div className="space-y-3">
                       {purchase.items.map((item) => (
-                        <div key={item.id} className="bg-white rounded-lg border p-3">
-                          {/* Single Row: Product Name | Status | Prices | Image | Actions */}
-                          <div className="flex items-center gap-4">
-                            {/* Product Name & Status */}
-                            <div className="flex items-center gap-2 min-w-[280px]">
-                              <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
-                              <Badge variant={getItemStatusColor(item.status)}>
+                        <div key={item.id} className="bg-white rounded-lg border p-2 pr-2">
+                          <div className="grid grid-cols-[minmax(500px,1fr)_110px_110px_110px_110px_110px_80px_minmax(280px,1fr)] gap-x-16 items-center">
+                            {/* Product Name */}
+                            <div className="min-w-0 justify-self-start">
+                              <h4 className="font-medium text-gray-900 break-words">{item.name}</h4>
+                            </div>
+
+                            {/* Status */}
+                            <div className="flex items-center">
+                              <Badge variant={getItemStatusColor(item.status)} className="flex-shrink-0">
                                 {item.status.replace(/_/g, " ")}
                               </Badge>
                             </div>
 
-                            {/* Quoted Prices - inline */}
-                            <div className="flex items-center gap-6 flex-1">
-                              <div className="text-center">
-                                <p className="text-xs text-gray-500">Buy Low</p>
-                                <p className="font-medium text-sm">
-                                  {item.botEstimatedPrice ? `R ${item.botEstimatedPrice.toLocaleString()}` : "-"}
-                                </p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-xs text-gray-500">Buy High</p>
-                                <p className="font-medium text-sm">
-                                  {item.suggestedSellPrice ? `R ${item.suggestedSellPrice.toLocaleString()}` : "-"}
-                                </p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-xs text-gray-500">Consignment Low</p>
-                                <p className="font-medium text-sm text-orange-600">
-                                  {item.proposedPrice ? `R ${(item.proposedPrice * 0.7).toFixed(0)}` : "-"}
-                                </p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-xs text-gray-500">Consignment High</p>
-                                <p className="font-medium text-sm text-orange-600">
-                                  {item.suggestedSellPrice ? `R ${(item.suggestedSellPrice * 0.7).toFixed(0)}` : "-"}
-                                </p>
-                              </div>
+                            {/* Buy Low */}
+                            <div className="flex items-center justify-center">
+                              <p className="font-medium text-sm whitespace-nowrap">
+                                {formatPrice(item.botEstimatedPrice)}
+                              </p>
                             </div>
 
-                            {/* Image - Clickable for lightbox */}
-                            {item.imageUrls.length > 0 && (
-                              <button
-                                onClick={() => openLightbox(item.imageUrls, 0)}
-                                className="relative h-12 w-12 flex-shrink-0 group"
-                              >
-                                <img
-                                  src={item.imageUrls[0]}
-                                  alt={item.name}
-                                  className="h-full w-full object-cover rounded border group-hover:opacity-75 transition-opacity"
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded">
-                                  <ZoomIn className="h-4 w-4 text-white drop-shadow-lg" />
-                                </div>
-                                {item.imageUrls.length > 1 && (
-                                  <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center text-[10px]">
-                                    {item.imageUrls.length}
-                                  </span>
-                                )}
-                              </button>
-                            )}
+                            {/* Buy High */}
+                            <div className="flex items-center justify-center">
+                              <p className="font-medium text-sm whitespace-nowrap">
+                                {formatPrice(item.suggestedSellPrice)}
+                              </p>
+                            </div>
 
-                            {/* Actions */}
-                            <div className="flex gap-2 flex-shrink-0">
-                              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openEditModal(item); }}>
-                                <Edit className="h-4 w-4 mr-1" />
-                                Adjust
-                              </Button>
+                            {/* Consignment Low */}
+                            <div className="flex items-center justify-center">
+                              <p className="font-medium text-sm text-orange-600 whitespace-nowrap">
+                                {item.proposedPrice ? formatPrice(item.proposedPrice * 0.7) : "-"}
+                              </p>
+                            </div>
+
+                            {/* Consignment High */}
+                            <div className="flex items-center justify-center">
+                              <p className="font-medium text-sm text-orange-600 whitespace-nowrap">
+                                {item.suggestedSellPrice ? formatPrice(item.suggestedSellPrice * 0.7) : "-"}
+                              </p>
+                            </div>
+
+                            {/* Image - clickable for lightbox */}
+                            <div className="flex items-center">
+                              {item.imageUrls.length > 0 ? (
+                                <button
+                                  onClick={() => openLightbox(item.imageUrls, 0)}
+                                  className="relative h-12 w-12 flex-shrink-0 group"
+                                >
+                                  <img
+                                    src={item.imageUrls[0]}
+                                    alt={item.name}
+                                    className="h-full w-full object-cover rounded border group-hover:opacity-75 transition-opacity"
+                                  />
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded">
+                                    <ZoomIn className="h-4 w-4 text-white drop-shadow-lg" />
+                                  </div>
+                                  {item.imageUrls.length > 1 && (
+                                    <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center text-[10px]">
+                                      {item.imageUrls.length}
+                                    </span>
+                                  )}
+                                </button>
+                              ) : (
+                                <div className="h-12 w-12 flex-shrink-0 bg-gray-100 rounded border flex items-center justify-center">
+                                  <span className="text-xs text-gray-400">No image</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Actions - Edit button anchored to far right */}
+                            <div className="flex gap-2 w-full pr-0 justify-self-end">
                               {item.status === "PENDING" || item.status === "PRICE_ADJUSTED" ? (
                                 <>
-                                  <Button size="sm" onClick={(e) => handleApproveItem(item.id, e)} className="bg-green-600">
+                                  <Button size="sm" onClick={(e) => handleApproveItem(item.id, e)} className="bg-green-600 hover:bg-green-700">
                                     <Check className="h-4 w-4 mr-1" />
                                     Approve
                                   </Button>
@@ -406,6 +493,11 @@ export default function IncomingGearPage() {
                                   </Button>
                                 </>
                               ) : null}
+                              <div className="flex-1"></div>
+                              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openEditModal(item); }} className="mr-0">
+                                <Edit className="h-4 w-4 mr-1" />
+                                Edit
+                              </Button>
                             </div>
                           </div>
                         </div>
@@ -420,17 +512,16 @@ export default function IncomingGearPage() {
                               <div key={item.id} className="flex justify-between">
                                 <span className="text-blue-700">{item.name}</span>
                                 <span className="font-medium text-blue-900">
-                                  R {(item.finalPrice || item.proposedPrice || 0).toLocaleString()}
+                                  {formatPrice(item.finalPrice || item.proposedPrice || 0)}
                                 </span>
                               </div>
                             ))}
                             <div className="flex justify-between pt-2 border-t border-blue-300">
                               <span className="font-bold text-blue-900">TOTAL</span>
                               <span className="font-bold text-blue-900 text-lg">
-                                R {purchase.items
+                                {formatPrice(purchase.items
                                   .filter(i => i.status === "APPROVED" || i.status === "PRICE_ADJUSTED")
-                                  .reduce((sum, i) => sum + (i.finalPrice || i.proposedPrice || 0), 0)
-                                  .toLocaleString()}
+                                  .reduce((sum, i) => sum + (i.finalPrice || i.proposedPrice || 0), 0))}
                               </span>
                             </div>
                           </div>
