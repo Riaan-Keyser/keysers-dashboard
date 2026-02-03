@@ -106,7 +106,7 @@ interface AccessoryTemplate {
 export default function ItemVerificationPage() {
   const router = useRouter()
   const params = useParams()
-  const sessionId = params.sessionId as string
+  const sessionId = params.id as string
   const itemId = params.itemId as string
 
   const [currentStep, setCurrentStep] = useState(0)
