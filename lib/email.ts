@@ -310,6 +310,423 @@ export async function sendQuoteDeclinedEmail({
 }
 
 /**
+ * Send shipping instructions email to client (Sprint 1)
+ */
+export async function sendShippingInstructionsEmail({
+  customerName,
+  customerEmail,
+  token,
+  totalAmount
+}: {
+  customerName: string
+  customerEmail: string
+  token: string
+  totalAmount?: any
+}): Promise<EmailResponse> {
+  if (!process.env.RESEND_API_KEY) {
+    console.log("📧 [DEV MODE] Would send shipping instructions email to:", customerEmail)
+    console.log("   Token:", token.substring(0, 8) + "...")
+    return { success: true }
+  }
+
+  try {
+    const trackingUrl = `${emailConfig.dashboardUrl}/quote/${token}/shipping`
+    const total = totalAmount ? `R${Number(totalAmount).toLocaleString()}` : "TBC"
+
+    const { data, error } = await resend.emails.send({
+      from: `${emailConfig.companyName} <${emailConfig.from}>`,
+      to: [customerEmail],
+      subject: `How to Ship Your Gear to ${emailConfig.companyName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #0066cc; color: white; padding: 20px; text-align: center; }
+              .content { background-color: #f9f9f9; padding: 30px; }
+              .address-box { background-color: white; padding: 20px; margin: 20px 0; border-left: 4px solid #0066cc; }
+              .steps { background-color: white; padding: 20px; margin: 20px 0; border-radius: 5px; }
+              .steps ol { padding-left: 20px; }
+              .steps li { margin: 10px 0; }
+              .button { display: inline-block; padding: 15px 30px; margin: 20px 0; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; text-align: center; }
+              .alert { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>📦 Ship Your Gear to Us</h1>
+                <p>Preliminary Quote Accepted: ${total}</p>
+              </div>
+              
+              <div class="content">
+                <h2>Hi ${customerName},</h2>
+                <p>Thank you for accepting our preliminary quote! We're excited to inspect your gear and provide you with a final offer.</p>
+                
+                <div class="alert">
+                  <strong>⚠️ Important:</strong> This is a preliminary evaluation. Your final quote will be confirmed after we inspect your gear in person.
+                </div>
+                
+                <h3>📍 Shipping Address</h3>
+                <div class="address-box">
+                  <strong>${emailConfig.companyName}</strong><br>
+                  65 Tennant Street<br>
+                  Windsor Park, Kraaifontein<br>
+                  7570<br>
+                  South Africa
+                </div>
+                
+                <h3>📋 Packaging Instructions</h3>
+                <div class="steps">
+                  <ol>
+                    <li><strong>Pack Securely:</strong> Use original boxes if available, or sturdy packaging with bubble wrap</li>
+                    <li><strong>Include Accessories:</strong> Chargers, batteries, straps, lens caps, etc.</li>
+                    <li><strong>Remove Memory Cards:</strong> Please remove any personal data</li>
+                    <li><strong>Insure Your Shipment:</strong> We recommend insuring high-value items</li>
+                    <li><strong>Use a Reliable Courier:</strong> The Courier Guy, DHL, Aramex, or similar</li>
+                  </ol>
+                </div>
+                
+                <h3>📦 Submit Your Tracking Number</h3>
+                <p>Once you've shipped your gear, please provide us with your tracking number so we can monitor delivery:</p>
+                
+                <div style="text-align: center;">
+                  <a href="${trackingUrl}" class="button">Submit Tracking Info →</a>
+                </div>
+                
+                <p style="font-size: 12px; color: #666; text-align: center;">
+                  Or copy this link: <br>
+                  <a href="${trackingUrl}">${trackingUrl}</a>
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                
+                <h3>🔍 What Happens Next?</h3>
+                <div class="steps">
+                  <ol>
+                    <li>Ship your gear to us using a reliable courier</li>
+                    <li>Submit your tracking number via the link above</li>
+                    <li>We'll notify you when we receive your gear</li>
+                    <li>We'll inspect each item thoroughly (serial numbers, condition, accessories)</li>
+                    <li>You'll receive a final quote via email</li>
+                    <li>Accept the final quote and get paid!</li>
+                  </ol>
+                </div>
+                
+                <p style="font-size: 13px; color: #666;">
+                  <strong>Questions?</strong> Just reply to this email or call us at 072 392 6372.
+                </p>
+              </div>
+              
+              <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} ${emailConfig.companyName}. All rights reserved.</p>
+                <p><a href="${emailConfig.companyWebsite}" style="color: #0066cc;">${emailConfig.companyWebsite}</a></p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+    })
+
+    if (error) {
+      console.error("Failed to send shipping instructions email:", error)
+      return { success: false, error: error.message }
+    }
+
+    console.log("✅ Shipping instructions email sent:", data?.id)
+    return { success: true, messageId: data?.id }
+
+  } catch (error: any) {
+    console.error("Error sending shipping instructions email:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Send gear received confirmation email to client (Sprint 1)
+ */
+export async function sendGearReceivedEmail({
+  customerName,
+  customerEmail,
+  itemCount
+}: {
+  customerName: string
+  customerEmail: string
+  itemCount: number
+}): Promise<EmailResponse> {
+  if (!process.env.RESEND_API_KEY) {
+    console.log("📧 [DEV MODE] Would send gear received email to:", customerEmail)
+    console.log("   Items:", itemCount)
+    return { success: true }
+  }
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: `${emailConfig.companyName} <${emailConfig.from}>`,
+      to: [customerEmail],
+      subject: `✅ We've Received Your Camera Gear - ${emailConfig.companyName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #28a745; color: white; padding: 20px; text-align: center; }
+              .content { background-color: #f9f9f9; padding: 30px; }
+              .success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 20px; margin: 20px 0; }
+              .timeline { background-color: white; padding: 20px; margin: 20px 0; border-radius: 5px; }
+              .timeline-item { display: flex; align-items: start; margin: 15px 0; }
+              .timeline-icon { background-color: #0066cc; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>✅ Gear Received!</h1>
+                <p>Your shipment has arrived safely</p>
+              </div>
+              
+              <div class="content">
+                <h2>Hi ${customerName},</h2>
+                
+                <div class="success-box">
+                  <strong>Good news!</strong> We've safely received your camera equipment (${itemCount} item${itemCount !== 1 ? 's' : ''}).
+                </div>
+                
+                <p>Your gear is now in our secure facility and we'll start the inspection process soon.</p>
+                
+                <h3>🔍 What Happens Next</h3>
+                <div class="timeline">
+                  <div class="timeline-item">
+                    <div class="timeline-icon">1</div>
+                    <div>
+                      <strong>Inspection</strong><br>
+                      <span style="color: #666;">Our team will carefully inspect each item, verify serial numbers, check condition, and confirm all included accessories.</span>
+                    </div>
+                  </div>
+                  
+                  <div class="timeline-item">
+                    <div class="timeline-icon">2</div>
+                    <div>
+                      <strong>Final Quote</strong><br>
+                      <span style="color: #666;">You'll receive a final quote via email based on the actual condition and specifications of your gear.</span>
+                    </div>
+                  </div>
+                  
+                  <div class="timeline-item">
+                    <div class="timeline-icon">3</div>
+                    <div>
+                      <strong>Your Decision</strong><br>
+                      <span style="color: #666;">Review the final quote and choose between buyout or consignment for each item.</span>
+                    </div>
+                  </div>
+                  
+                  <div class="timeline-item">
+                    <div class="timeline-icon">4</div>
+                    <div>
+                      <strong>Get Paid</strong><br>
+                      <span style="color: #666;">Once you accept and provide your banking details, we'll process your payment.</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <p style="background-color: #e7f3ff; padding: 15px; border-radius: 5px;">
+                  ⏱️ <strong>Estimated Timeline:</strong> We typically complete inspections within 48-72 hours. You'll receive an email as soon as your final quote is ready.
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                
+                <p style="font-size: 13px; color: #666;">
+                  <strong>Questions or concerns?</strong><br>
+                  Feel free to reply to this email or call us at 072 392 6372.<br>
+                  We're here to help!
+                </p>
+              </div>
+              
+              <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} ${emailConfig.companyName}. All rights reserved.</p>
+                <p><a href="${emailConfig.companyWebsite}" style="color: #0066cc;">${emailConfig.companyWebsite}</a></p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+    })
+
+    if (error) {
+      console.error("Failed to send gear received email:", error)
+      return { success: false, error: error.message }
+    }
+
+    console.log("✅ Gear received email sent:", data?.id)
+    return { success: true, messageId: data?.id }
+
+  } catch (error: any) {
+    console.error("Error sending gear received email:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Send final quote email to client (Sprint 2)
+ * Sent after inspection is complete
+ */
+export async function sendFinalQuoteEmail({
+  customerName,
+  customerEmail,
+  token,
+  itemCount,
+  inspectionNotes
+}: {
+  customerName: string
+  customerEmail: string
+  token: string
+  itemCount: number
+  inspectionNotes?: string
+}): Promise<EmailResponse> {
+  if (!process.env.RESEND_API_KEY) {
+    console.log("📧 [DEV MODE] Would send final quote email to:", customerEmail)
+    console.log("   Token:", token.substring(0, 8) + "...")
+    return { success: true }
+  }
+
+  try {
+    const quoteUrl = `${emailConfig.dashboardUrl}/quote/${token}/select-products`
+
+    const { data, error } = await resend.emails.send({
+      from: `${emailConfig.companyName} <${emailConfig.from}>`,
+      to: [customerEmail],
+      subject: `Your Final Quote from ${emailConfig.companyName} - Ready to Review`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #28a745; color: white; padding: 20px; text-align: center; }
+              .content { background-color: #f9f9f9; padding: 30px; }
+              .success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 20px; margin: 20px 0; }
+              .info-box { background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 20px; margin: 20px 0; }
+              .timeline { background-color: white; padding: 20px; margin: 20px 0; border-radius: 5px; }
+              .timeline-item { display: flex; align-items: start; margin: 15px 0; }
+              .timeline-icon { background-color: #0066cc; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0; font-weight: bold; }
+              .button { display: inline-block; padding: 15px 30px; margin: 20px 0; background-color: #0066cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; text-align: center; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>✅ Inspection Complete!</h1>
+                <p>Your Final Quote is Ready</p>
+              </div>
+              
+              <div class="content">
+                <h2>Hi ${customerName},</h2>
+                
+                <div class="success-box">
+                  <strong>Great news!</strong> We've completed the inspection of your camera gear (${itemCount} item${itemCount !== 1 ? 's' : ''}) and your final quote is ready for review.
+                </div>
+                
+                ${inspectionNotes ? `
+                  <div class="info-box">
+                    <strong>Inspection Notes:</strong><br>
+                    ${inspectionNotes}
+                  </div>
+                ` : ''}
+                
+                <p>We've carefully inspected each item, verified serial numbers, checked all accessories, and assessed the condition of your gear.</p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${quoteUrl}" class="button">📋 Open Your Final Quote →</a>
+                </div>
+                
+                <p style="font-size: 12px; color: #666; text-align: center;">
+                  Or copy this link: <br>
+                  <a href="${quoteUrl}">${quoteUrl}</a>
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                
+                <h3>🎯 What Happens Next</h3>
+                <div class="timeline">
+                  <div class="timeline-item">
+                    <div class="timeline-icon">1</div>
+                    <div>
+                      <strong>Review Your Final Quote</strong><br>
+                      <span style="color: #666;">See the final buy and consignment prices for each item based on our inspection.</span>
+                    </div>
+                  </div>
+                  
+                  <div class="timeline-item">
+                    <div class="timeline-icon">2</div>
+                    <div>
+                      <strong>Choose Buy or Consignment</strong><br>
+                      <span style="color: #666;">For each item, decide if you want us to buy it outright or sell it on consignment.</span>
+                    </div>
+                  </div>
+                  
+                  <div class="timeline-item">
+                    <div class="timeline-icon">3</div>
+                    <div>
+                      <strong>Provide Your Details</strong><br>
+                      <span style="color: #666;">We'll need your personal and banking information to process payment.</span>
+                    </div>
+                  </div>
+                  
+                  <div class="timeline-item">
+                    <div class="timeline-icon">4</div>
+                    <div>
+                      <strong>Get Paid</strong><br>
+                      <span style="color: #666;">Once everything is confirmed, we'll process your payment!</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <p style="background-color: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107;">
+                  ⚠️ <strong>Important:</strong> This link will expire in 7 days. Please review and respond at your earliest convenience.
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                
+                <p style="font-size: 13px; color: #666;">
+                  <strong>Questions?</strong><br>
+                  Feel free to reply to this email or call us at 072 392 6372.<br>
+                  We're here to help!
+                </p>
+              </div>
+              
+              <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} ${emailConfig.companyName}. All rights reserved.</p>
+                <p><a href="${emailConfig.companyWebsite}" style="color: #0066cc;">${emailConfig.companyWebsite}</a></p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+    })
+
+    if (error) {
+      console.error("Failed to send final quote email:", error)
+      return { success: false, error: error.message }
+    }
+
+    console.log("✅ Final quote email sent:", data?.id)
+    return { success: true, messageId: data?.id }
+
+  } catch (error: any) {
+    console.error("Error sending final quote email:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Test email configuration
  */
 export async function sendTestEmail(toEmail: string): Promise<EmailResponse> {

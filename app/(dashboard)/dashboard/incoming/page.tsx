@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { PackagePlus, ChevronDown, ChevronRight, Check, X, Edit, DollarSign, ZoomIn, Trash2, Phone, Mail, Send } from "lucide-react"
+import { PackagePlus, ChevronDown, ChevronRight, Check, X, Edit, DollarSign, ZoomIn, Trash2, Phone, Mail, Send, Package, Truck, CheckCircle, ClipboardCheck, ArrowRight, Loader2, RefreshCw, Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,6 +32,7 @@ interface PendingPurchase {
   id: string
   customerName: string
   customerPhone: string
+  customerEmail: string | null
   whatsappConversationId: string | null
   totalQuoteAmount: number | null
   status: string
@@ -39,6 +40,27 @@ interface PendingPurchase {
   createdAt: string
   items: PendingItem[]
   vendor: { id: string; name: string } | null
+  // Sprint 1: Shipping & Tracking
+  courierCompany: string | null
+  trackingNumber: string | null
+  gearReceivedAt: string | null
+  gearReceivedBy: { name: string } | null
+  // Sprint 2: Inspection Integration
+  inspectionSessionId: string | null
+  inspectionSession: {
+    id: string
+    sessionName: string
+    status: string
+    createdAt: string
+    incomingItems: {
+      id: string
+      status: string
+      verifiedItem: {
+        status: string
+      } | null
+    }[]
+  } | null
+  finalQuoteSentAt: string | null
 }
 
 const formatPhoneNumber = (phone: string): string => {
@@ -75,6 +97,9 @@ export default function IncomingGearPage() {
   const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(new Set())
   const [statusFilter, setStatusFilter] = useState("ALL")
   
+  // Auto-refresh state
+  const [newItemsCount, setNewItemsCount] = useState(0)
+  
   // Edit modal state
   const [editingItem, setEditingItem] = useState<PendingItem | null>(null)
   const [editPrices, setEditPrices] = useState({
@@ -96,23 +121,60 @@ export default function IncomingGearPage() {
   const [selectedPurchase, setSelectedPurchase] = useState<PendingPurchase | null>(null)
   const [emailForQuote, setEmailForQuote] = useState("")
 
+  // Sprint 2: Inspection state
+  const [startingInspection, setStartingInspection] = useState<string | null>(null)
+  const [sendingFinalQuote, setSendingFinalQuote] = useState<string | null>(null)
+
   useEffect(() => {
     fetchPurchases()
   }, [statusFilter])
 
-  const fetchPurchases = async () => {
-    setLoading(true)
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchPurchases(true) // Silent refresh (don't show loading state)
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(interval)
+  }, [statusFilter])
+
+  const fetchPurchases = async (silent = false) => {
+    if (!silent) {
+      setLoading(true)
+    }
+    
     try {
       const response = await fetch(`/api/incoming-gear?status=${statusFilter}`)
       if (response.ok) {
         const data = await response.json()
+        
+        // Detect new items (only during auto-refresh)
+        if (silent && purchases.length > 0) {
+          const newItems = data.filter(
+            (newPurchase: PendingPurchase) => 
+              !purchases.some(existing => existing.id === newPurchase.id)
+          )
+          
+          if (newItems.length > 0) {
+            setNewItemsCount(prev => prev + newItems.length)
+            console.log(`🔔 ${newItems.length} new purchase(s) detected`)
+          }
+        }
+        
         setPurchases(data)
       }
     } catch (error) {
       console.error("Failed to fetch purchases:", error)
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
+  }
+
+  const handleManualRefresh = () => {
+    setNewItemsCount(0) // Reset new items indicator
+    fetchPurchases()
   }
 
   const toggleExpand = (purchaseId: string) => {
@@ -276,6 +338,85 @@ export default function IncomingGearPage() {
     }
   }
 
+  const handleMarkAsReceived = async (purchaseId: string, customerName: string) => {
+    if (!confirm(`Confirm that you have physically received the gear from ${customerName}?\n\nThis will:\n- Update status to "Inspection In Progress"\n- Send confirmation email to the client\n- Allow you to start the inspection process`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/incoming-gear/${purchaseId}/mark-received`, {
+        method: "POST"
+      })
+
+      if (response.ok) {
+        alert(`✅ Gear marked as received!\n\nEmail confirmation sent to ${customerName}.\n\nYou can now start the inspection process.`)
+        fetchPurchases()
+      } else {
+        const data = await response.json()
+        alert(`❌ Failed: ${data.error || "Unable to mark as received"}`)
+      }
+    } catch (error) {
+      console.error("Failed to mark as received:", error)
+      alert("Failed to mark gear as received")
+    }
+  }
+
+  const handleStartInspection = async (purchaseId: string, customerName: string) => {
+    if (!confirm(`Start inspection for ${customerName}?\n\nThis will:\n- Create an inspection session\n- Copy all items for verification\n- Redirect you to the inspection page`)) {
+      return
+    }
+
+    setStartingInspection(purchaseId)
+
+    try {
+      const response = await fetch(`/api/incoming-gear/${purchaseId}/start-inspection`, {
+        method: "POST"
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        alert(`✅ Inspection session created!\n\nSession: ${data.sessionName}\nItems: ${data.itemCount}\n\nRedirecting to inspection page...`)
+        window.location.href = data.redirectUrl
+      } else {
+        alert(`❌ Failed: ${data.error || "Unable to start inspection"}`)
+      }
+    } catch (error) {
+      console.error("Failed to start inspection:", error)
+      alert("Failed to start inspection")
+    } finally {
+      setStartingInspection(null)
+    }
+  }
+
+  const handleSendFinalQuote = async (purchaseId: string, customerName: string, customerEmail: string) => {
+    if (!confirm(`Send final quote to ${customerName} (${customerEmail})?\n\nThis will:\n- Email the customer with their final quote\n- Allow them to choose Buy vs Consignment\n- Update status to "Final Quote Sent"`)) {
+      return
+    }
+
+    setSendingFinalQuote(purchaseId)
+
+    try {
+      const response = await fetch(`/api/incoming-gear/${purchaseId}/send-final-quote`, {
+        method: "POST"
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        alert(`✅ Final quote sent successfully!\n\nSent to: ${data.sentTo}\nItems: ${data.itemCount}\n\nThe customer can now review and accept.`)
+        fetchPurchases()
+      } else {
+        alert(`❌ Failed: ${data.error || "Unable to send final quote"}`)
+      }
+    } catch (error) {
+      console.error("Failed to send final quote:", error)
+      alert("Failed to send final quote")
+    } finally {
+      setSendingFinalQuote(null)
+    }
+  }
+
   const getStatusColor = (status: string): "default" | "success" | "warning" | "danger" | "info" => {
     const colors: Record<string, any> = {
       PENDING_REVIEW: "warning",
@@ -284,7 +425,12 @@ export default function IncomingGearPage() {
       APPROVED: "success",
       ADDED_TO_INVENTORY: "success",
       REJECTED: "danger",
-      CANCELLED: "default"
+      CANCELLED: "default",
+      // Sprint 1: New statuses
+      AWAITING_DELIVERY: "info",
+      INSPECTION_IN_PROGRESS: "info",
+      // Sprint 2: Final quote sent
+      FINAL_QUOTE_SENT: "success"
     }
     return colors[status] || "default"
   }
@@ -320,6 +466,30 @@ export default function IncomingGearPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Incoming Gear</h1>
           <p className="text-gray-500 mt-1">Review and approve equipment from customers</p>
+        </div>
+        
+        {/* Refresh controls */}
+        <div className="flex items-center gap-3">
+          {/* New items indicator */}
+          {newItemsCount > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg animate-pulse">
+              <Bell className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-900">
+                {newItemsCount} new {newItemsCount === 1 ? 'item' : 'items'}
+              </span>
+            </div>
+          )}
+          
+          {/* Manual refresh button */}
+          <Button
+            onClick={handleManualRefresh}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -357,6 +527,9 @@ export default function IncomingGearPage() {
         <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="ALL">All Status</option>
           <option value="PENDING_REVIEW">Pending Review</option>
+          <option value="AWAITING_DELIVERY">Awaiting Delivery</option>
+          <option value="INSPECTION_IN_PROGRESS">Inspection In Progress</option>
+          <option value="FINAL_QUOTE_SENT">Final Quote Sent</option>
           <option value="IN_REVIEW">In Review</option>
           <option value="APPROVED">Awaiting Client Feedback</option>
           <option value="PENDING_APPROVAL">Client Details Submitted</option>
@@ -435,6 +608,193 @@ export default function IncomingGearPage() {
                 {/* Expanded Items */}
                 {isExpanded && (
                   <div className="border-t bg-gray-50 p-3">
+                    {/* Tracking Info & Mark as Received Button */}
+                    {purchase.trackingNumber && (
+                      <div className="bg-white rounded-lg border p-4 mb-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-2">
+                              <Truck className="h-5 w-5 text-blue-600" />
+                              <div>
+                                <p className="text-xs text-gray-500">Courier</p>
+                                <p className="text-sm font-medium text-gray-900">{purchase.courierCompany}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Package className="h-5 w-5 text-blue-600" />
+                              <div>
+                                <p className="text-xs text-gray-500">Tracking Number</p>
+                                <p className="text-sm font-medium text-gray-900">{purchase.trackingNumber}</p>
+                              </div>
+                            </div>
+                            {purchase.gearReceivedAt && (
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className="h-5 w-5 text-green-600" />
+                                <div>
+                                  <p className="text-xs text-gray-500">Received</p>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {new Date(purchase.gearReceivedAt).toLocaleDateString()} by {purchase.gearReceivedBy?.name || "Staff"}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {!purchase.gearReceivedAt && (
+                            <Button
+                              onClick={() => handleMarkAsReceived(purchase.id, purchase.customerName)}
+                              variant="outline"
+                              size="sm"
+                              className="border-green-600 text-green-600 hover:bg-green-50"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Mark as Received
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sprint 2: Inspection Status & Actions */}
+                    {purchase.gearReceivedAt && purchase.status === "INSPECTION_IN_PROGRESS" && (
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4 mb-4">
+                        {!purchase.inspectionSessionId ? (
+                          // No inspection started yet
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <ClipboardCheck className="h-6 w-6 text-blue-600" />
+                              <div>
+                                <p className="font-semibold text-gray-900">Ready for Inspection</p>
+                                <p className="text-sm text-gray-600">Gear received. Click to start verifying items.</p>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => handleStartInspection(purchase.id, purchase.customerName)}
+                              disabled={startingInspection === purchase.id}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              {startingInspection === purchase.id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Starting...
+                                </>
+                              ) : (
+                                <>
+                                  <ClipboardCheck className="h-4 w-4 mr-2" />
+                                  Start Inspection
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        ) : (
+                          // Inspection in progress or complete
+                          <>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <ClipboardCheck className="h-6 w-6 text-blue-600" />
+                                <div>
+                                  <p className="font-semibold text-gray-900">🔍 Inspection In Progress</p>
+                                  <p className="text-xs text-gray-600">
+                                    Started: {new Date(purchase.inspectionSession!.createdAt).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Progress */}
+                            {purchase.inspectionSession && (
+                              <div className="mb-3">
+                                {(() => {
+                                  const approvedCount = purchase.inspectionSession.incomingItems.filter(
+                                    item => item.verifiedItem?.status === "APPROVED"
+                                  ).length
+                                  const totalCount = purchase.inspectionSession.incomingItems.length
+                                  const percentage = Math.round((approvedCount / totalCount) * 100)
+                                  const allApproved = approvedCount === totalCount && totalCount > 0
+
+                                  return (
+                                    <>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-sm font-medium text-gray-700">
+                                          Progress: {approvedCount}/{totalCount} items approved
+                                        </span>
+                                        <span className="text-sm font-semibold text-blue-600">{percentage}%</span>
+                                      </div>
+                                      <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div
+                                          className={`h-2 rounded-full transition-all ${
+                                            allApproved ? "bg-green-600" : "bg-blue-600"
+                                          }`}
+                                          style={{ width: `${percentage}%` }}
+                                        />
+                                      </div>
+                                      {allApproved && (
+                                        <p className="text-xs text-green-600 font-medium mt-1">
+                                          ✅ All items approved! Ready to send final quote.
+                                        </p>
+                                      )}
+                                    </>
+                                  )
+                                })()}
+                              </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.location.href = `/dashboard/inspections/${purchase.inspectionSessionId}`}
+                                className="flex-1"
+                              >
+                                <ArrowRight className="h-4 w-4 mr-2" />
+                                Continue Inspection
+                              </Button>
+
+                              {purchase.inspectionSession && 
+                               purchase.inspectionSession.incomingItems.length > 0 &&
+                               purchase.inspectionSession.incomingItems.every(
+                                 item => item.verifiedItem?.status === "APPROVED"
+                               ) && (
+                                <Button
+                                  onClick={() => handleSendFinalQuote(purchase.id, purchase.customerName, purchase.customerEmail!)}
+                                  disabled={sendingFinalQuote === purchase.id || !purchase.customerEmail}
+                                  className="flex-1 bg-green-600 hover:bg-green-700"
+                                  size="sm"
+                                >
+                                  {sendingFinalQuote === purchase.id ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Sending...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send className="h-4 w-4 mr-2" />
+                                      Send Final Quote
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Final Quote Sent Status */}
+                    {purchase.status === "FINAL_QUOTE_SENT" && purchase.finalQuoteSentAt && (
+                      <div className="bg-green-50 rounded-lg border border-green-200 p-4 mb-4">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="h-6 w-6 text-green-600" />
+                          <div>
+                            <p className="font-semibold text-gray-900">✅ Final Quote Sent</p>
+                            <p className="text-sm text-gray-600">
+                              Sent on {new Date(purchase.finalQuoteSentAt).toLocaleDateString()} - Awaiting customer response
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Column Headers */}
                     <div className="grid grid-cols-[minmax(500px,1fr)_110px_110px_110px_110px_110px_80px_minmax(280px,1fr)] gap-x-16 mb-3">
                       <div className="justify-self-start"></div> {/* Empty for product name column */}

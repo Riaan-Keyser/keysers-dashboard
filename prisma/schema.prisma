@@ -31,6 +31,7 @@ model User {
   activityLogs      ActivityLog[]
   reviewedPurchases PendingPurchase[] @relation("ReviewedPurchases")
   approvedPurchases PendingPurchase[] @relation("ApprovedPurchases")
+  receivedGear      PendingPurchase[] @relation("GearReceivedBy")
 
   // Inspection relations
   createdInspectionSessions InspectionSession[] @relation("CreatedBy")
@@ -278,6 +279,18 @@ model PendingPurchase {
   clientDeclinedAt    DateTime? // When client declined quote
   clientDeclineReason String? // Optional reason for decline
 
+  // Shipping & Tracking (Sprint 1)
+  courierCompany         String? // Courier service name (e.g., "The Courier Guy", "DHL")
+  trackingNumber         String? // Tracking/waybill number
+  gearReceivedAt         DateTime? // When staff confirmed gear received
+  gearReceivedByUserId   String? // User who marked as received
+  gearReceivedBy         User?     @relation("GearReceivedBy", fields: [gearReceivedByUserId], references: [id])
+
+  // Inspection Integration (Sprint 2)
+  inspectionSessionId    String?           @unique
+  inspectionSession      InspectionSession? @relation(fields: [inspectionSessionId], references: [id])
+  finalQuoteSentAt       DateTime? // When final quote email sent to client
+
   // Review process
   reviewedById String?
   reviewedBy   User?     @relation("ReviewedPurchases", fields: [reviewedById], references: [id])
@@ -341,6 +354,11 @@ enum PurchaseStatus {
   ADDED_TO_INVENTORY // Successfully added to inventory
   REJECTED // Rejected, not purchasing
   CANCELLED // Customer cancelled
+  
+  // Shipping & Inspection statuses (Sprint 1)
+  AWAITING_DELIVERY // Client shipped gear, waiting for receipt
+  INSPECTION_IN_PROGRESS // Gear received, staff inspecting
+  FINAL_QUOTE_SENT // Inspection complete, final quote sent to client
   
   // Quote workflow statuses (NEW)
   QUOTE_SENT // Admin sent quote to client via email
@@ -540,7 +558,8 @@ model InspectionSession {
   createdBy   User      @relation("CreatedBy", fields: [createdById], references: [id])
 
   // Relations
-  incomingItems IncomingGearItem[]
+  incomingItems   IncomingGearItem[]
+  pendingPurchase PendingPurchase? // Sprint 2: One-to-one back-relation
 
   @@index([status])
   @@index([vendorId])

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { generateConfirmationToken, getTokenExpiry } from "@/lib/token"
+import { sendShippingInstructionsEmail } from "@/lib/email"
 
 /**
  * Webhook endpoint for Kapso bot to call when a customer accepts a quote
@@ -65,6 +67,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Generate tracking token for client
+    const trackingToken = generateConfirmationToken()
+    const tokenExpiry = getTokenExpiry()
+
     // Create pending purchase with items
     const pendingPurchase = await prisma.pendingPurchase.create({
       data: {
@@ -76,6 +82,8 @@ export async function POST(request: NextRequest) {
         botQuoteAcceptedAt: body.botQuoteAcceptedAt ? new Date(body.botQuoteAcceptedAt) : new Date(),
         botConversationData: body.botConversationData ? JSON.stringify(body.botConversationData) : null,
         status: "PENDING_REVIEW",
+        quoteConfirmationToken: trackingToken,
+        quoteTokenExpiresAt: tokenExpiry,
         items: {
           create: body.items.map((item: any) => ({
             name: item.name,
@@ -99,6 +107,24 @@ export async function POST(request: NextRequest) {
     })
 
     console.log(`✅ Quote accepted webhook: Created pending purchase ${pendingPurchase.id} for ${body.customerName} with ${body.items.length} items`)
+
+    // Send shipping instructions email if customer email is available
+    if (body.customerEmail) {
+      const emailResult = await sendShippingInstructionsEmail({
+        customerName: body.customerName,
+        customerEmail: body.customerEmail,
+        token: trackingToken,
+        totalAmount: body.totalQuoteAmount
+      })
+
+      if (emailResult.success) {
+        console.log(`✅ Shipping instructions email sent to ${body.customerEmail}`)
+      } else {
+        console.warn(`⚠️ Failed to send shipping instructions email: ${emailResult.error}`)
+      }
+    } else {
+      console.log(`ℹ️ No email provided, skipping shipping instructions email`)
+    }
 
     return NextResponse.json(
       {
