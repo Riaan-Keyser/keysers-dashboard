@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { validateQuoteToken, invalidateToken } from "@/lib/token"
 import { prisma } from "@/lib/prisma"
-import { validateSAIdNumber, extractDOBFromIdNumber } from "@/lib/validators"
+import { validateClientIdentity, validatePhoneNumber, extractDOBFromIdNumber } from "@/lib/validators"
 import { sendAwaitingPaymentEmail } from "@/lib/email"
 
 export async function POST(
@@ -35,8 +35,8 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Validate required fields
-    const requiredFields = ["fullName", "surname", "idNumber", "email", "phone", "physicalAddress"]
+    // Validate required fields (relaxed for international clients)
+    const requiredFields = ["fullName", "surname", "email", "phone", "physicalAddress"]
     for (const field of requiredFields) {
       if (!body[field]) {
         return NextResponse.json({ 
@@ -45,15 +45,31 @@ export async function POST(
       }
     }
 
-    // Validate SA ID number
-    if (!validateSAIdNumber(body.idNumber)) {
+    // Validate identity (SA ID OR Passport)
+    const identityValidation = validateClientIdentity({
+      idNumber: body.idNumber,
+      passportNumber: body.passportNumber
+    })
+
+    if (!identityValidation.valid) {
       return NextResponse.json({ 
-        error: "Invalid South African ID number" 
+        error: identityValidation.error 
       }, { status: 400 })
     }
 
-    // Extract date of birth from ID number
-    const dateOfBirth = extractDOBFromIdNumber(body.idNumber)
+    // Validate phone number (SA or international)
+    if (!validatePhoneNumber(body.phone)) {
+      return NextResponse.json({ 
+        error: "Invalid phone number format" 
+      }, { status: 400 })
+    }
+
+    // Extract date of birth (from SA ID or manual entry)
+    const dateOfBirth = body.idNumber 
+      ? extractDOBFromIdNumber(body.idNumber) 
+      : body.dateOfBirth 
+        ? new Date(body.dateOfBirth) 
+        : null
 
     // Create client details
     const clientDetails = await prisma.clientDetails.create({
@@ -61,7 +77,10 @@ export async function POST(
         pendingPurchaseId: purchase.id,
         fullName: body.fullName,
         surname: body.surname,
-        idNumber: body.idNumber,
+        idNumber: body.idNumber || null,
+        passportNumber: body.passportNumber || null,
+        passportCountry: body.passportCountry || null,
+        nationality: body.nationality || null,
         email: body.email,
         phone: body.phone,
         dateOfBirth: dateOfBirth || undefined,

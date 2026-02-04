@@ -408,10 +408,15 @@ model ClientDetails {
   // Personal Information
   fullName    String
   surname     String
-  idNumber    String // South African ID number
   email       String
   phone       String
-  dateOfBirth DateTime? // Extracted from ID number or provided
+  
+  // Identity (SA or International)
+  idNumber        String? // South African ID number (optional for international clients)
+  passportNumber  String? // International passport number
+  passportCountry String? // Country of passport issuance
+  nationality     String? // Client nationality
+  dateOfBirth     DateTime? // Extracted from ID number or manually provided
 
   // Address Information
   physicalAddress    String // Full physical address

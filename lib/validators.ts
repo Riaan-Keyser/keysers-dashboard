@@ -132,3 +132,86 @@ export function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
 }
+
+/**
+ * Validate passport number (basic format check)
+ * Most passports are 6-9 alphanumeric characters
+ */
+export function validatePassportNumber(passportNumber: string): boolean {
+  if (!passportNumber || typeof passportNumber !== 'string') {
+    return false
+  }
+
+  const cleaned = passportNumber.replace(/[\s-]/g, '')
+  
+  // Basic check: 6-9 alphanumeric characters
+  return /^[A-Z0-9]{6,9}$/i.test(cleaned)
+}
+
+/**
+ * Validate international phone number
+ * Accepts E.164 format: +[country code][number]
+ */
+export function validateInternationalPhoneNumber(phone: string): boolean {
+  if (!phone || typeof phone !== 'string') {
+    return false
+  }
+
+  const cleaned = phone.replace(/[\s\-()]/g, '')
+  
+  // E.164 format: +[1-3 digit country code][4-14 digits]
+  // Examples: +1234567890, +447123456789, +861234567890
+  return /^\+[1-9]\d{1,2}\d{4,14}$/.test(cleaned)
+}
+
+/**
+ * Smart validation: SA ID OR Passport
+ */
+export function validateClientIdentity(data: {
+  idNumber?: string
+  passportNumber?: string
+}): { valid: boolean; error?: string } {
+  
+  // Must have at least one form of ID
+  if (!data.idNumber && !data.passportNumber) {
+    return {
+      valid: false,
+      error: "Please provide either a South African ID number or passport number"
+    }
+  }
+
+  // If SA ID provided, validate it
+  if (data.idNumber) {
+    if (!validateSAIdNumber(data.idNumber)) {
+      return {
+        valid: false,
+        error: "Invalid South African ID number"
+      }
+    }
+  }
+
+  // If passport provided, validate it
+  if (data.passportNumber) {
+    if (!validatePassportNumber(data.passportNumber)) {
+      return {
+        valid: false,
+        error: "Invalid passport number (must be 6-9 alphanumeric characters)"
+      }
+    }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * Smart phone validation: SA or International
+ */
+export function validatePhoneNumber(phone: string): boolean {
+  // Try SA format first
+  if (validateSAPhoneNumber(phone)) {
+    return true
+  }
+  
+  // Fall back to international format
+  return validateInternationalPhoneNumber(phone)
+}
