@@ -133,7 +133,31 @@ export default function ClientDetailsPage() {
       }
     }
 
-    // Steps 3 (banking) and 4 (documents) are optional
+    if (stepNumber === 3) {
+      // Banking details validation (NOW REQUIRED)
+      if (!formData.bankName.trim()) {
+        newErrors.bankName = "Bank name is required"
+      }
+      if (!formData.accountNumber.trim()) {
+        newErrors.accountNumber = "Account number is required"
+      }
+      if (!formData.accountType.trim()) {
+        newErrors.accountType = "Account type is required"
+      }
+      if (!formData.branchCode.trim()) {
+        newErrors.branchCode = "Branch code is required"
+      }
+      if (!formData.accountHolderName.trim()) {
+        newErrors.accountHolderName = "Account holder name is required"
+      }
+    }
+
+    if (stepNumber === 4) {
+      // Document upload validation (Proof of ID is NOW REQUIRED)
+      if (!files.proofOfId) {
+        newErrors.proofOfId = "Proof of ID is required"
+      }
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -192,8 +216,8 @@ export default function ClientDetailsPage() {
   const stepTitles = [
     "Personal Information",
     "Address",
-    "Banking Details (Optional)",
-    "Upload Documents (Optional)"
+    "Banking Details",
+    "Upload Documents"
   ]
 
   return (
@@ -542,7 +566,7 @@ export default function ClientDetailsPage() {
         </Card>
       )}
 
-      {/* Step 3: Banking (Optional) */}
+      {/* Step 3: Banking (REQUIRED) */}
       {step === 3 && (
         <Card className="p-6 md:p-8 space-y-6">
           <div>
@@ -550,35 +574,39 @@ export default function ClientDetailsPage() {
               Banking Details
             </h2>
             <p className="text-gray-600">
-              Optional - Provide banking details for direct transfer
+              Required - Provide banking details for payment transfer
             </p>
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-gray-700">
-              💡 <strong>Tip:</strong> Providing banking details allows us to transfer funds directly to your account.
-              You can skip this step and provide payment details later.
+              💳 <strong>Important:</strong> We need your banking details to transfer funds directly to your account.
+              Please ensure all information is accurate.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="bankName">Bank Name</Label>
+              <Label htmlFor="bankName">Bank Name *</Label>
               <Input
                 id="bankName"
                 value={formData.bankName}
                 onChange={(e) => updateField("bankName", e.target.value)}
                 placeholder="e.g., Standard Bank"
+                className={errors.bankName ? "border-red-500" : ""}
               />
+              {errors.bankName && (
+                <p className="text-sm text-red-600 mt-1">{errors.bankName}</p>
+              )}
             </div>
 
             <div>
-              <Label htmlFor="accountType">Account Type</Label>
+              <Label htmlFor="accountType">Account Type *</Label>
               <Select
                 value={formData.accountType}
                 onValueChange={(value) => updateField("accountType", value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className={errors.accountType ? "border-red-500" : ""}>
                   <SelectValue placeholder="Select account type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -587,39 +615,54 @@ export default function ClientDetailsPage() {
                   <SelectItem value="transmission">Transmission</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.accountType && (
+                <p className="text-sm text-red-600 mt-1">{errors.accountType}</p>
+              )}
             </div>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="accountNumber">Account Number</Label>
+              <Label htmlFor="accountNumber">Account Number *</Label>
               <Input
                 id="accountNumber"
                 value={formData.accountNumber}
                 onChange={(e) => updateField("accountNumber", e.target.value)}
                 placeholder="1234567890"
+                className={errors.accountNumber ? "border-red-500" : ""}
               />
+              {errors.accountNumber && (
+                <p className="text-sm text-red-600 mt-1">{errors.accountNumber}</p>
+              )}
             </div>
 
             <div>
-              <Label htmlFor="branchCode">Branch Code</Label>
+              <Label htmlFor="branchCode">Branch Code *</Label>
               <Input
                 id="branchCode"
                 value={formData.branchCode}
                 onChange={(e) => updateField("branchCode", e.target.value)}
                 placeholder="250655"
+                className={errors.branchCode ? "border-red-500" : ""}
               />
+              {errors.branchCode && (
+                <p className="text-sm text-red-600 mt-1">{errors.branchCode}</p>
+              )}
             </div>
           </div>
 
           <div>
-            <Label htmlFor="accountHolderName">Account Holder Name</Label>
+            <Label htmlFor="accountHolderName">Account Holder Name *</Label>
             <Input
               id="accountHolderName"
               value={formData.accountHolderName}
               onChange={(e) => updateField("accountHolderName", e.target.value)}
               placeholder="John Doe"
+              className={errors.accountHolderName ? "border-red-500" : ""}
             />
+            {errors.accountHolderName && (
+              <p className="text-sm text-red-600 mt-1">{errors.accountHolderName}</p>
+            )}
             <p className="text-xs text-gray-500 mt-1">
               Must match the name on your ID/Passport
             </p>
@@ -638,7 +681,7 @@ export default function ClientDetailsPage() {
         </Card>
       )}
 
-      {/* Step 4: Documents */}
+      {/* Step 4: Documents (ID REQUIRED) */}
       {step === 4 && (
         <Card className="p-6 md:p-8 space-y-6">
           <div>
@@ -646,14 +689,14 @@ export default function ClientDetailsPage() {
               Upload Documents
             </h2>
             <p className="text-gray-600">
-              Optional - Upload supporting documents (recommended)
+              Required - Upload proof of identity
             </p>
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-sm text-gray-700">
-              ⚠️ <strong>Note:</strong> Uploading proof of ID and address helps us verify your information faster
-              and speeds up the payment process. However, this step is optional.
+              🔐 <strong>Important:</strong> Proof of ID is required for verification and compliance purposes.
+              Proof of address is optional but recommended for faster processing.
             </p>
           </div>
 
@@ -661,24 +704,29 @@ export default function ClientDetailsPage() {
             label="Proof of ID"
             accept=".pdf,.jpg,.jpeg,.png"
             maxSize={5}
-            onFileSelect={(file) => setFiles(prev => ({ ...prev, proofOfId: file || undefined }))}
+            required={true}
+            error={errors.proofOfId}
+            onFileSelect={(file) => {
+              setFiles(prev => ({ ...prev, proofOfId: file || undefined }))
+              if (file) {
+                setErrors(prev => ({ ...prev, proofOfId: "" }))
+              }
+            }}
           />
 
           <FileUpload
-            label="Proof of Address"
+            label="Proof of Address (Optional)"
             accept=".pdf,.jpg,.jpeg,.png"
             maxSize={5}
             onFileSelect={(file) => setFiles(prev => ({ ...prev, proofOfAddress: file || undefined }))}
           />
 
-          {formData.bankName && (
-            <FileUpload
-              label="Bank Confirmation Letter (Optional)"
-              accept=".pdf,.jpg,.jpeg,.png"
-              maxSize={5}
-              onFileSelect={(file) => setFiles(prev => ({ ...prev, bankConfirmation: file || undefined }))}
-            />
-          )}
+          <FileUpload
+            label="Bank Confirmation Letter (Optional)"
+            accept=".pdf,.jpg,.jpeg,.png"
+            maxSize={5}
+            onFileSelect={(file) => setFiles(prev => ({ ...prev, bankConfirmation: file || undefined }))}
+          />
 
           <div className="flex gap-4">
             <Button onClick={handleBack} variant="outline" className="flex-1" size="lg">
