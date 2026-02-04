@@ -39,6 +39,9 @@ model User {
   priceOverrides            PriceOverride[]     @relation("OverriddenBy")
   reopenedItems             VerifiedGearItem[]  @relation("ReopenedBy")
 
+  // Quote confirmation relations
+  verifiedClientDetails ClientDetails[] @relation("VerifiedBy")
+
   @@map("users")
 }
 
@@ -265,6 +268,16 @@ model PendingPurchase {
   botQuoteAcceptedAt  DateTime?
   botConversationData String? // JSON data from bot
 
+  // Quote confirmation tracking (NEW)
+  quoteConfirmedAt        DateTime? // When admin sent quote to client
+  quoteConfirmationToken  String?   @unique // Unique token for email link
+  quoteTokenExpiresAt     DateTime? // Token expiry (7 days default)
+
+  // Client response tracking (NEW)
+  clientAcceptedAt    DateTime? // When client accepted quote
+  clientDeclinedAt    DateTime? // When client declined quote
+  clientDeclineReason String? // Optional reason for decline
+
   // Review process
   reviewedById String?
   reviewedBy   User?     @relation("ReviewedPurchases", fields: [reviewedById], references: [id])
@@ -276,13 +289,13 @@ model PendingPurchase {
   approvedAt     DateTime?
   rejectedReason String?
 
-  // Supplier Invoice
+  // Supplier Invoice (DEPRECATED - kept for backward compatibility)
   invoiceNumber      String?   @unique
   invoiceTotal       Decimal?  @db.Decimal(10, 2)
   invoiceEmailSentAt DateTime?
   invoiceAcceptToken String?   @unique // Unique token for client acceptance link
 
-  // Client Details (captured after email acceptance)
+  // Client Details (DEPRECATED - moved to ClientDetails model)
   clientDetailsSubmitted   Boolean   @default(false)
   clientIdNumber           String?
   clientAddress            String?
@@ -304,7 +317,8 @@ model PendingPurchase {
   notes String?
 
   // Relations
-  items PendingItem[]
+  items         PendingItem[]
+  clientDetails ClientDetails? // NEW: One-to-one relation
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -312,8 +326,10 @@ model PendingPurchase {
 
   @@index([status])
   @@index([customerPhone])
+  @@index([customerEmail])
   @@index([whatsappConversationId])
   @@index([invoiceAcceptToken])
+  @@index([quoteConfirmationToken])
   @@map("pending_purchases")
 }
 
@@ -325,6 +341,14 @@ enum PurchaseStatus {
   ADDED_TO_INVENTORY // Successfully added to inventory
   REJECTED // Rejected, not purchasing
   CANCELLED // Customer cancelled
+  
+  // Quote workflow statuses (NEW)
+  QUOTE_SENT // Admin sent quote to client via email
+  CLIENT_ACCEPTED // Client accepted quote
+  CLIENT_DECLINED // Client declined quote
+  AWAITING_PAYMENT // Client accepted & submitted details, awaiting payment
+  PAYMENT_RECEIVED // Payment completed
+  COMPLETED // Purchase fully completed
 }
 
 // Individual items in a pending purchase
@@ -373,6 +397,63 @@ enum ItemStatus {
   REJECTED // Not purchasing this item
   PRICE_ADJUSTED // Price has been adjusted
   ADDED_TO_INVENTORY // Successfully added to inventory
+}
+
+// Client Details - collected after quote acceptance
+model ClientDetails {
+  id                String          @id @default(cuid())
+  pendingPurchaseId String          @unique
+  pendingPurchase   PendingPurchase @relation(fields: [pendingPurchaseId], references: [id], onDelete: Cascade)
+
+  // Personal Information
+  fullName    String
+  surname     String
+  idNumber    String // South African ID number
+  email       String
+  phone       String
+  dateOfBirth DateTime? // Extracted from ID number or provided
+
+  // Address Information
+  physicalAddress    String // Full physical address
+  physicalStreet     String?
+  physicalCity       String?
+  physicalProvince   String?
+  physicalPostalCode String?
+
+  postalAddress      String? // If different from physical
+  postalCity         String?
+  postalProvince     String?
+  postalPostalCode   String?
+
+  // Banking Information (Optional - for future payouts)
+  bankName          String?
+  accountNumber     String?
+  accountType       String? // Cheque, Savings
+  branchCode        String?
+  accountHolderName String?
+
+  // Document Uploads
+  proofOfIdUrl        String? // URL to uploaded ID document
+  proofOfAddressUrl   String? // URL to uploaded proof of address
+  bankConfirmationUrl String? // URL to bank confirmation letter
+
+  // Metadata
+  ipAddress String? // Client IP for security
+  userAgent String? // Browser info
+  submittedAt DateTime @default(now())
+  
+  // Verification by admin
+  verifiedAt   DateTime?
+  verifiedById String?
+  verifiedBy   User?     @relation("VerifiedBy", fields: [verifiedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([idNumber])
+  @@index([pendingPurchaseId])
+  @@map("client_details")
 }
 
 // ========================================
