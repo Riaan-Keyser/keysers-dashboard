@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { PackagePlus, ChevronDown, ChevronRight, Check, X, Edit, DollarSign, ZoomIn, Trash2, Phone, Mail } from "lucide-react"
+import { PackagePlus, ChevronDown, ChevronRight, Check, X, Edit, DollarSign, ZoomIn, Trash2, Phone, Mail, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -89,6 +89,12 @@ export default function IncomingGearPage() {
   const [lightboxImages, setLightboxImages] = useState<string[]>([])
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [showLightbox, setShowLightbox] = useState(false)
+  
+  // Quote confirmation modal state
+  const [sendingQuote, setSendingQuote] = useState<string | null>(null)
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [selectedPurchase, setSelectedPurchase] = useState<PendingPurchase | null>(null)
+  const [emailForQuote, setEmailForQuote] = useState("")
 
   useEffect(() => {
     fetchPurchases()
@@ -215,6 +221,40 @@ export default function IncomingGearPage() {
     setLightboxImages(images)
     setLightboxIndex(index)
     setShowLightbox(true)
+  }
+
+  const handleSendQuote = (purchase: PendingPurchase) => {
+    setSelectedPurchase(purchase)
+    setEmailForQuote(purchase.customerPhone || "")  // Use phone for now, or add customerEmail field
+    setShowEmailModal(true)
+  }
+
+  const confirmSendQuote = async () => {
+    if (!selectedPurchase) return
+    
+    setSendingQuote(selectedPurchase.id)
+    try {
+      const response = await fetch(`/api/incoming-gear/${selectedPurchase.id}/send-quote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerEmail: emailForQuote })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        alert(data.error || "Failed to send quote")
+        return
+      }
+
+      alert(`✅ Quote sent successfully to ${emailForQuote}\n\nThe customer will receive an email with a link to review and accept the quote.`)
+      setShowEmailModal(false)
+      fetchPurchases() // Refresh list
+    } catch (error) {
+      alert("Failed to send quote. Please try again.")
+    } finally {
+      setSendingQuote(null)
+    }
   }
 
   const handleApprovePurchase = async (purchaseId: string) => {
@@ -538,13 +578,23 @@ export default function IncomingGearPage() {
                               </p>
                               <p className="text-sm text-green-600">Ready to send to client for acceptance</p>
                             </div>
-                            <Button
-                              onClick={() => handleApprovePurchase(purchase.id)}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              <Check className="h-4 w-4 mr-2" />
-                              Approve for Payment
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => handleSendQuote(purchase)}
+                                disabled={sendingQuote === purchase.id}
+                                className="bg-purple-600 hover:bg-purple-700"
+                              >
+                                <Send className="h-4 w-4 mr-2" />
+                                {sendingQuote === purchase.id ? "Sending..." : "Confirm Quote"}
+                              </Button>
+                              <Button
+                                onClick={() => handleApprovePurchase(purchase.id)}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <Check className="h-4 w-4 mr-2" />
+                                Approve for Payment
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -660,6 +710,96 @@ export default function IncomingGearPage() {
               </Button>
               <Button onClick={handleSavePrices} disabled={saving}>
                 {saving ? "Saving..." : "Save & Mark Adjusted"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Email Confirmation Modal */}
+      <Modal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        title="Send Quote to Client"
+        size="md"
+      >
+        {selectedPurchase && (
+          <div className="space-y-4">
+            <p className="text-gray-600">
+              Send quote confirmation email to <strong>{selectedPurchase.customerName}</strong>?
+            </p>
+            
+            <div>
+              <Label htmlFor="quote-email">Email Address *</Label>
+              <Input
+                id="quote-email"
+                type="email"
+                value={emailForQuote}
+                onChange={(e) => setEmailForQuote(e.target.value)}
+                placeholder="customer@example.com"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Customer will receive a link to review and accept the quote
+              </p>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+              <p className="font-medium text-gray-900 mb-2">📧 What happens next:</p>
+              <ul className="text-gray-700 space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">1.</span>
+                  <span>Client receives email with quote details and total amount</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">2.</span>
+                  <span>They can accept or decline the quote via secure link</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">3.</span>
+                  <span>If accepted, they'll provide personal details and banking info</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">4.</span>
+                  <span>Purchase will move to <strong>"Awaiting Payment"</strong> section</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">5.</span>
+                  <span>You'll receive a notification when client submits details</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm">
+              <p className="font-medium text-purple-900 mb-1">💰 Quote Summary</p>
+              <p className="text-purple-700">
+                {selectedPurchase.items.length} item(s) • Total: {formatPrice(selectedPurchase.totalQuoteAmount || 0)}
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                onClick={() => setShowEmailModal(false)}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmSendQuote}
+                disabled={!emailForQuote || sendingQuote === selectedPurchase.id}
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
+              >
+                {sendingQuote === selectedPurchase.id ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2"></div>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Send Quote
+                  </>
+                )}
               </Button>
             </div>
           </div>

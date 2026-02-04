@@ -13,7 +13,8 @@ import {
   ShoppingCart,
   BarChart3,
   MessageCircle,
-  PackagePlus
+  PackagePlus,
+  CreditCard
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 
@@ -26,7 +27,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Incoming Gear", href: "/dashboard/incoming", icon: PackagePlus },
-  { name: "Awaiting Payment", href: "/dashboard/awaiting-payment", icon: DollarSign },
+  { name: "Awaiting Payment", href: "/dashboard/awaiting-payment", icon: CreditCard },
   { name: "Inventory", href: "/dashboard/inventory", icon: Package },
   { name: "Vendors/Clients", href: "/dashboard/vendors", icon: Users },
   { name: "Repairs", href: "/dashboard/repairs", icon: Wrench },
