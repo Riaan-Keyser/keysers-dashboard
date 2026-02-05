@@ -74,23 +74,20 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   )
 
   const handleSelect = useCallback((product: Product) => {
-    // Immediately set flag to prevent any reopening
+    // Immediately set all states to prevent any interference
     justSelectedRef.current = true
-    
-    // Close dropdown first
-    setShowResults(false)
-    
-    // Set selected product (this prevents onFocus from reopening)
     setSelectedProduct(product)
     setSearchTerm(product.name)
+    setShowResults(false)
+    setProducts([]) // Clear products to prevent dropdown from showing
     
     // Call parent handler
     onSelect(product)
     
-    // Keep flag set for longer to prevent any reopening
+    // Keep flag set to prevent any reopening
     setTimeout(() => {
       justSelectedRef.current = false
-    }, 1000)
+    }, 2000)
   }, [onSelect])
 
   // Auto-search when component mounts with initialSearch
@@ -119,11 +116,18 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
           type="text"
           value={searchTerm}
           onChange={(e) => {
-            setSearchTerm(e.target.value)
-            if (!e.target.value) {
+            const newValue = e.target.value
+            setSearchTerm(newValue)
+            
+            if (!newValue) {
+              // Clear everything if input is empty
               setSelectedProduct(null)
               setProducts([])
               setShowResults(false)
+            } else if (selectedProduct && newValue !== selectedProduct.name) {
+              // User is editing after selection - clear selection
+              setSelectedProduct(null)
+              setShowResults(true)
             } else if (!selectedProduct) {
               // Only show results when actively typing and no product selected
               setShowResults(true)
@@ -137,8 +141,9 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
           }}
           onBlur={() => {
             // Close dropdown after allowing click to register
+            // But don't interfere if a product is already selected
             setTimeout(() => {
-              if (!justSelectedRef.current) {
+              if (!justSelectedRef.current && !selectedProduct) {
                 setShowResults(false)
               }
             }, 200)
