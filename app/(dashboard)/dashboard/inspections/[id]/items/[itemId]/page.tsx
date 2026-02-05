@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Card } from "@/components/ui/card"
@@ -201,7 +201,7 @@ export default function ItemVerificationPage() {
     }
   }
 
-  const handleProductSelect = async (product: Product) => {
+  const handleProductSelect = useCallback(async (product: Product) => {
     setSelectedProduct(product)
     
     // If this product is already linked (same as existing verifiedItem), skip API call
@@ -253,7 +253,7 @@ export default function ItemVerificationPage() {
         console.log("Product select error:", error)
       }
     }
-  }
+  }, [item?.verifiedItem?.product?.id, itemId])
 
   const handleVerify = async () => {
     try {
