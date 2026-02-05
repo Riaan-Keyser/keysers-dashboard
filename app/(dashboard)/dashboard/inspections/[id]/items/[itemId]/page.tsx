@@ -493,27 +493,32 @@ export default function ItemVerificationPage() {
       <div className="mt-8">
         {/* STEP 1: IDENTIFY PRODUCT */}
         {currentStep === 0 && (
-          <Card className="p-6 min-h-[400px]">
-            <h2 className="text-xl font-semibold mb-4">Identify Product</h2>
-            <p className="text-gray-600 mb-6">
-              Search for and select the canonical product that matches this item
-            </p>
+          <div className="relative">
+            <Card className="p-6 pb-24">
+              <h2 className="text-xl font-semibold mb-4">Identify Product</h2>
+              <p className="text-gray-600 mb-6">
+                Search for and select the canonical product that matches this item
+              </p>
 
-            <ProductSearch
-              value={selectedProduct?.id}
-              onSelect={handleProductSelect}
-              onClear={() => setSelectedProduct(null)}
-            />
+              <ProductSearch
+                value={selectedProduct?.id}
+                onSelect={handleProductSelect}
+                onClear={() => setSelectedProduct(null)}
+              />
+            </Card>
 
-            {selectedProduct && (
-              <div className="mt-6 flex justify-end">
-                <Button onClick={() => setCurrentStep(1)}>
-                  Next: Verification
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
-            )}
-          </Card>
+            {/* Fixed Next Button at Bottom Right */}
+            <div className="fixed bottom-8 right-8 z-10">
+              <Button 
+                onClick={() => setCurrentStep(1)}
+                disabled={!selectedProduct}
+                className={`${!selectedProduct ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                Next: Verification
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </div>
         )}
 
         {/* STEP 2: VERIFY */}

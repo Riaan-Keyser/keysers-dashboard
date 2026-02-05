@@ -87,6 +87,13 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
   useEffect(() => {
     const fetchProductById = async () => {
       if (!value) {
+        // If value is cleared, clear the selected product
+        if (selectedProduct) {
+          setSelectedProduct(null)
+          setSearchTerm("")
+          setProducts([])
+          setShowResults(false)
+        }
         return
       }
       
@@ -100,7 +107,9 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
         if (response.ok) {
           const product = await response.json()
           setSelectedProduct(product)
-          setSearchTerm(product.name)
+          setSearchTerm("")  // Clear search term to prevent dropdown
+          setProducts([])     // Clear any search results
+          setShowResults(false) // Hide dropdown
         }
       } catch (error) {
         console.error("Failed to fetch product by ID:", error)
@@ -162,7 +171,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
       </div>
 
       {/* Search Results Dropdown */}
-      {showResults && searchTerm.length >= 2 && products.length > 0 && (
+      {showResults && searchTerm.length >= 2 && products.length > 0 && !selectedProduct && (
         <Card className="absolute z-50 w-full mt-2 max-h-96 overflow-y-auto shadow-lg">
           <div className="p-2 space-y-1">
             {products.map((product) => (
