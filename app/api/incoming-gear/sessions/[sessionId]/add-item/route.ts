@@ -36,7 +36,7 @@ export async function POST(
         clientSerialNumber: null,
         clientCondition: null,
         clientImages: [],
-        inspectionStatus: "PENDING"
+        inspectionStatus: "UNVERIFIED"
       }
     })
 
