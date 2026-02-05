@@ -1,10 +1,11 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
-import { Search, Check } from "lucide-react"
+import { Search, Check, Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { formatPrice } from "@/lib/inspection-pricing"
 
 interface Product {
@@ -223,11 +224,24 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
 
       {/* No results */}
       {searchTerm.length >= 2 && !loading && products.length === 0 && !selectedProduct && (
-        <div className="absolute top-full left-0 right-0 mt-2">
-          <Card className="p-4 text-center text-sm text-gray-600">
-            No products found. Try a different search term.
-          </Card>
-        </div>
+        <Card className="p-6 text-center mt-4">
+          <p className="text-gray-600 mb-4">No products found. Try a different search term.</p>
+          <p className="text-sm text-gray-500 mb-4">Can't find the product? Add it to the database.</p>
+          <Button
+            onClick={() => {
+              // Trigger add new product - will be handled by parent
+              if (onSelect) {
+                // @ts-ignore - Pass special flag to parent to trigger add product modal
+                onSelect({ __addNewProduct: true, searchTerm } as any)
+              }
+            }}
+            variant="outline"
+            className="border-blue-600 text-blue-600 hover:bg-blue-50"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add New Product to Database
+          </Button>
+        </Card>
       )}
     </div>
   )
