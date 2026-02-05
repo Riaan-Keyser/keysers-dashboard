@@ -162,7 +162,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
                 }}
                 className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between pointer-events-none">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-gray-900">{product.name}</p>
