@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
-import { Search, Check, Plus } from "lucide-react"
+import { Search, Check, Plus, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -25,11 +25,12 @@ interface Product {
 interface ProductSearchProps {
   value?: string // selected product ID
   onSelect: (product: Product) => void
+  onClear?: () => void // Optional callback when product is deselected
   initialSearch?: string
   autoSelect?: boolean // Auto-select first result if available
 }
 
-export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect = false }: ProductSearchProps) {
+export function ProductSearch({ value, onSelect, onClear, initialSearch = "", autoSelect = false }: ProductSearchProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
@@ -210,7 +211,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
       {selectedProduct && !showResults && (
         <Card className="mt-4 p-4">
           <div className="flex justify-between items-start">
-            <div>
+            <div className="flex-1">
               <p className="font-semibold text-gray-900">{selectedProduct.name}</p>
               <p className="text-sm text-gray-600">
                 {selectedProduct.brand} {selectedProduct.model}
@@ -231,7 +232,23 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
                 </p>
               </div>
             </div>
-            <Badge>{selectedProduct.productType.replace(/_/g, " ")}</Badge>
+            <div className="flex items-start gap-2 ml-4">
+              <Badge>{selectedProduct.productType.replace(/_/g, " ")}</Badge>
+              <button
+                onClick={() => {
+                  setSelectedProduct(null)
+                  setSearchTerm("")
+                  setProducts([])
+                  if (onClear) {
+                    onClear()
+                  }
+                }}
+                className="p-1 hover:bg-red-50 rounded transition-colors"
+                title="Clear selected product"
+              >
+                <X className="h-4 w-4 text-red-600 hover:text-red-700" />
+              </button>
+            </div>
           </div>
         </Card>
       )}

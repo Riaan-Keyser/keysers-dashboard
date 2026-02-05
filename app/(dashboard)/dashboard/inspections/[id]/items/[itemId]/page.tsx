@@ -519,6 +519,7 @@ export default function ItemVerificationPage() {
             <ProductSearch
               value={selectedProduct?.id}
               onSelect={handleProductSelect}
+              onClear={() => setSelectedProduct(null)}
             />
 
             {selectedProduct && (

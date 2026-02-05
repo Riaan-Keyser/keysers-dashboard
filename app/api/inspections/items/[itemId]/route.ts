@@ -156,6 +156,12 @@ export async function POST(
         }
       })
 
+      // Update incoming item name to the new product name
+      await prisma.incomingGearItem.update({
+        where: { id: itemId },
+        data: { clientName: product.name }
+      })
+
       // Log re-identification
       await prisma.activityLog.create({
         data: {
@@ -194,10 +200,13 @@ export async function POST(
         }
       })
 
-      // Update incoming item status
+      // Update incoming item status and name
       await prisma.incomingGearItem.update({
         where: { id: itemId },
-        data: { inspectionStatus: "IN_PROGRESS" }
+        data: { 
+          inspectionStatus: "IN_PROGRESS",
+          clientName: product.name // Update to the identified product name
+        }
       })
 
       // Log identification
