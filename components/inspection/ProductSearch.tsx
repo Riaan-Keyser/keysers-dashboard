@@ -36,6 +36,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   const [showResults, setShowResults] = useState(false)
   const [hasAutoSelected, setHasAutoSelected] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const justSelectedRef = useRef(false)
 
   // Debounced search
@@ -76,6 +77,12 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   const handleSelect = useCallback((product: Product) => {
     // Immediately set all states to prevent any interference
     justSelectedRef.current = true
+    
+    // Blur the input to prevent any focus events
+    if (inputRef.current) {
+      inputRef.current.blur()
+    }
+    
     setSelectedProduct(product)
     setSearchTerm(product.name)
     setShowResults(false)
@@ -113,6 +120,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
+          ref={inputRef}
           type="text"
           value={searchTerm}
           onChange={(e) => {
@@ -134,19 +142,13 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
             }
           }}
           onFocus={() => {
+            // Never reopen if product is selected
+            if (selectedProduct) return
+            
             // Only show dropdown if typing and no product selected yet
-            if (!selectedProduct && searchTerm.length >= 2 && products.length > 0 && !justSelectedRef.current) {
+            if (searchTerm.length >= 2 && products.length > 0 && !justSelectedRef.current) {
               setShowResults(true)
             }
-          }}
-          onBlur={() => {
-            // Close dropdown after allowing click to register
-            // But don't interfere if a product is already selected
-            setTimeout(() => {
-              if (!justSelectedRef.current && !selectedProduct) {
-                setShowResults(false)
-              }
-            }, 200)
           }}
           placeholder="Search by brand, model, or name..."
           className="pl-10"
