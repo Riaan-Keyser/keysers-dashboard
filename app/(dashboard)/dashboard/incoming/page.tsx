@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { Lightbox } from "@/components/ui/lightbox"
+import { AlertModal } from "@/components/ui/alert-modal"
 import { InspectItemModal } from "@/components/inspection/InspectItemModal"
 
 interface PendingItem {
@@ -131,6 +132,17 @@ export default function IncomingGearPage() {
   const [startingInspection, setStartingInspection] = useState<string | null>(null)
   const [sendingFinalQuote, setSendingFinalQuote] = useState<string | null>(null)
   const [inspectingItemId, setInspectingItemId] = useState<string | null>(null)
+
+  // Alert Modal
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean
+    message: string
+    type: "success" | "error" | "info" | "warning"
+  }>({
+    isOpen: false,
+    message: "",
+    type: "info"
+  })
   const [inspectingPurchaseId, setInspectingPurchaseId] = useState<string | null>(null)
   
   // Undo state
@@ -402,15 +414,27 @@ export default function IncomingGearPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        alert(data.error || "Failed to send quote")
+        setAlertModal({
+          isOpen: true,
+          message: data.error || "Failed to send quote",
+          type: "error"
+        })
         return
       }
 
-      alert(`✅ Quote sent successfully to ${emailForQuote}\n\nThe customer will receive an email with a link to review and accept the quote.`)
+      setAlertModal({
+        isOpen: true,
+        message: `Quote sent successfully to ${emailForQuote}\n\nThe customer will receive an email with a link to review and accept the quote.`,
+        type: "success"
+      })
       setShowEmailModal(false)
       fetchPurchases() // Refresh list
     } catch (error) {
-      alert("Failed to send quote. Please try again.")
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to send quote. Please try again.",
+        type: "error"
+      })
     } finally {
       setSendingQuote(null)
     }
@@ -426,12 +450,20 @@ export default function IncomingGearPage() {
 
       if (response.ok) {
         const data = await response.json()
-        alert(`✅ Invoice ${data.invoiceNumber} generated!\n\nEmail sent to client with Accept/Decline buttons.\n\nOnce client accepts and submits details, it will appear in Awaiting Payment.`)
+        setAlertModal({
+          isOpen: true,
+          message: `Invoice ${data.invoiceNumber} generated!\n\nEmail sent to client with Accept/Decline buttons.\n\nOnce client accepts and submits details, it will appear in Awaiting Payment.`,
+          type: "success"
+        })
         fetchPurchases()
       }
     } catch (error) {
       console.error("Failed to approve:", error)
-      alert("Failed to generate invoice")
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to generate invoice",
+        type: "error"
+      })
     }
   }
 
@@ -446,15 +478,27 @@ export default function IncomingGearPage() {
       })
 
       if (response.ok) {
-        alert(`✅ Gear marked as received!\n\nThe client will be notified in 10 minutes.\n\nYou can undo this action before then if needed.`)
+        setAlertModal({
+          isOpen: true,
+          message: `Gear marked as received!\n\nThe client will be notified in 10 minutes.\n\nYou can undo this action before then if needed.`,
+          type: "success"
+        })
         fetchPurchases()
       } else {
         const data = await response.json()
-        alert(`❌ Failed: ${data.error || "Unable to mark as received"}`)
+        setAlertModal({
+          isOpen: true,
+          message: `Failed: ${data.error || "Unable to mark as received"}`,
+          type: "error"
+        })
       }
     } catch (error) {
       console.error("Failed to mark as received:", error)
-      alert("Failed to mark gear as received")
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to mark gear as received",
+        type: "error"
+      })
     }
   }
 
@@ -471,15 +515,27 @@ export default function IncomingGearPage() {
       })
 
       if (response.ok) {
-        alert(`✅ Action undone successfully!\n\nStatus reset for ${customerName}.`)
+        setAlertModal({
+          isOpen: true,
+          message: `Action undone successfully!\n\nStatus reset for ${customerName}.`,
+          type: "success"
+        })
         fetchPurchases()
       } else {
         const data = await response.json()
-        alert(`❌ Failed: ${data.error || "Unable to undo"}`)
+        setAlertModal({
+          isOpen: true,
+          message: `Failed: ${data.error || "Unable to undo"}`,
+          type: "error"
+        })
       }
     } catch (error) {
       console.error("Failed to undo:", error)
-      alert("Failed to undo action")
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to undo action",
+        type: "error"
+      })
     } finally {
       setUndoingReceived(null)
     }
@@ -563,14 +619,26 @@ export default function IncomingGearPage() {
       const data = await response.json()
 
       if (response.ok) {
-        alert(`✅ Final quote sent successfully!\n\nSent to: ${data.sentTo}\nItems: ${data.itemCount}\n\nThe customer can now review and accept.`)
+        setAlertModal({
+          isOpen: true,
+          message: `Final quote sent successfully!\n\nSent to: ${data.sentTo}\nItems: ${data.itemCount}\n\nThe customer can now review and accept.`,
+          type: "success"
+        })
         fetchPurchases()
       } else {
-        alert(`❌ Failed: ${data.error || "Unable to send final quote"}`)
+        setAlertModal({
+          isOpen: true,
+          message: `Failed: ${data.error || "Unable to send final quote"}`,
+          type: "error"
+        })
       }
     } catch (error) {
       console.error("Failed to send final quote:", error)
-      alert("Failed to send final quote")
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to send final quote",
+        type: "error"
+      })
     } finally {
       setSendingFinalQuote(null)
     }
@@ -1420,6 +1488,14 @@ export default function IncomingGearPage() {
           </div>
         </div>
       )}
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+        message={alertModal.message}
+        type={alertModal.type}
+      />
     </div>
   )
 }
