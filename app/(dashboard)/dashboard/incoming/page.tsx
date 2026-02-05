@@ -1119,6 +1119,55 @@ export default function IncomingGearPage() {
                         </div>
                       </div>
                     )}
+
+                    {/* Product List for Non-Inspection Statuses (AWAITING_DELIVERY, PENDING_REVIEW, etc.) */}
+                    {purchase.status !== "INSPECTION_IN_PROGRESS" && purchase.status !== "FINAL_QUOTE_SENT" && purchase.items && purchase.items.length > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="font-medium text-gray-700 mb-2">Products ({purchase.items.length})</h4>
+                        {purchase.items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition-all"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-start gap-3">
+                                  {item.images && item.images.length > 0 && (
+                                    <img
+                                      src={item.images[0]}
+                                      alt={item.name}
+                                      className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-80"
+                                      onClick={() => openLightbox(item.images!, 0)}
+                                    />
+                                  )}
+                                  <div className="flex-1">
+                                    <h5 className="font-medium text-gray-900">{item.name}</h5>
+                                    {(item.brand || item.model) && (
+                                      <p className="text-sm text-gray-600">
+                                        {[item.brand, item.model].filter(Boolean).join(" ")}
+                                      </p>
+                                    )}
+                                    {item.description && (
+                                      <p className="text-sm text-gray-500 mt-1 line-clamp-2">{item.description}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                {item.botEstimatedPrice && (
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {formatPrice(item.botEstimatedPrice)}
+                                  </p>
+                                )}
+                                <Badge variant={getItemStatusColor(item.status)} className="mt-1">
+                                  {item.status.replace(/_/g, " ")}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </Card>
