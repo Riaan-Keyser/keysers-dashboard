@@ -363,11 +363,10 @@ export default function IncomingGearPage() {
         // Navigate to verify page for the new item
         window.location.href = `/dashboard/inspections/${sessionId}/items/${newItem.id}`
       } else {
-        alert("Failed to add product")
+        console.error("Failed to add product")
       }
     } catch (error) {
       console.error("Failed to add product:", error)
-      alert("Failed to add product")
     }
   }
 
