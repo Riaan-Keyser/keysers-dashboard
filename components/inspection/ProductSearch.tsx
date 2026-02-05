@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Search, Check } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -35,6 +35,8 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [hasAutoSelected, setHasAutoSelected] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const justSelectedRef = useRef(false)
 
   // Debounced search
   const searchProducts = useCallback(
@@ -75,7 +77,13 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
     setSelectedProduct(product)
     setSearchTerm(product.name)
     setShowResults(false)
+    justSelectedRef.current = true
     onSelect(product)
+    
+    // Reset the flag after a short delay
+    setTimeout(() => {
+      justSelectedRef.current = false
+    }, 200)
   }, [onSelect])
 
   // Auto-search when component mounts with initialSearch
@@ -96,8 +104,20 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
     return () => clearTimeout(timer)
   }, [searchTerm, initialSearch, searchProducts])
 
+  // Click outside handler to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowResults(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
@@ -108,10 +128,12 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
             if (!e.target.value) {
               setSelectedProduct(null)
               setProducts([])
+              setShowResults(false)
             }
           }}
           onFocus={() => {
-            if (products.length > 0) {
+            // Don't reopen dropdown if user just selected a product
+            if (products.length > 0 && !justSelectedRef.current && !selectedProduct) {
               setShowResults(true)
             }
           }}
