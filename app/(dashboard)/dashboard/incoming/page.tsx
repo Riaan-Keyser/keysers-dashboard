@@ -1010,12 +1010,12 @@ export default function IncomingGearPage() {
                                 {purchase.inspectionSession.incomingItems.map((item) => {
                                   const getStatusBadge = () => {
                                     if (item.verifiedItem?.approvedAt) {
-                                      return <Badge className="bg-green-100 text-green-800">APPROVED</Badge>
+                                      return <Badge variant="success">APPROVED</Badge>
                                     }
                                     if (item.inspectionStatus === "IN_PROGRESS" || item.verifiedItem?.verifiedAt) {
-                                      return <Badge className="bg-blue-100 text-blue-800">IN PROGRESS</Badge>
+                                      return <Badge variant="info">IN PROGRESS</Badge>
                                     }
-                                    return <Badge className="bg-gray-100 text-gray-800">UNVERIFIED</Badge>
+                                    return <Badge variant="default">UNVERIFIED</Badge>
                                   }
 
                                   return (
