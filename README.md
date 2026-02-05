@@ -60,10 +60,14 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - Shipping instructions and tracking management
 - Client gear receiving with 10-minute undo grace period
 - Final quote generation and client approval flow
-- Mixed product selection (Buy vs Consignment per item)
-- Integrated personal details form (address, banking, ID upload)
-- Digital consignment agreement with auto-populated items
-- Payment tracking and status management
+- **Product selection page** - Client chooses Buy vs Consignment per item
+- **5-step details form** - Personal info, address, banking, document upload, terms
+- **Dynamic terms & conditions** - Consignment Agreement and/or Purchase Agreement
+- **Consignment period tracking** - Client sets end date for consignment
+- **Electronic signature** - ECTA-compliant with IP and timestamp logging
+- **PDF agreement generation** - Auto-generated Purchase and Consignment agreements
+- **Payment tracking** - Awaiting Payment and Payment Completed tabs
+- **Invoice generation** - Complete payment invoice with client banking details
 
 ✅ **Gear Verification & Inspection System**
 - Product identification with auto-search and selection
@@ -87,6 +91,16 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - Compact 2-column grid layout
 - Optional notes per accessory
 
+✅ **Payment Management**
+- **Awaiting Payment tab** - Track active payments with instant payment totals
+- **Payment Completed tab** - Historical payment records and tracking
+- **Smart calculations** - Separate Buy (instant payment) vs Consignment (paid on sale)
+- **Stats dashboard** - Buy items count, Consignment items count, Total Payable Value
+- **PDF generation** - Purchase Agreement, Consignment Agreement, and Payment Invoice
+- **Email notifications** - Auto-notify admin@keysers.co.za when payment pending
+- **Sidebar badges** - Red notification badge on Awaiting Payment with count
+- **Mark as Paid** - Move purchases to Payment Completed (never back to Incoming Gear)
+
 ## Tech Stack
 
 - **Framework**: Next.js 15 (App Router)
@@ -96,9 +110,11 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - **UI**: Tailwind CSS + shadcn/ui Components
 - **Icons**: Lucide React
 - **Email**: Resend API for transactional emails
+- **PDF Generation**: pdf-lib for agreement and invoice PDFs
 - **Bot Integration**: Kapso WhatsApp Bot API
 - **WooCommerce**: REST API Integration
 - **File Uploads**: Native file handling with validation
+- **Security**: ECTA-compliant electronic signatures, POPIA data protection
 
 ## Getting Started
 
@@ -189,26 +205,72 @@ After seeding, you can login with:
    ↓
 8. Staff Inspects Each Item:
    - Product identification (auto-search & select)
-   - Condition selection
-   - Accessories checklist
+   - Condition selection (Like New → Worn)
+   - Accessories checklist (product-type specific)
    - Serial number capture
    - Notes and observations
-   - Auto-computed pricing
-   - Admin price override (optional)
+   - Auto-computed pricing (buy & consignment)
+   - Admin price override (optional with reason)
    ↓
-9. Final Quote Sent to Client
+9. Staff Clicks "Confirm - Send Final Quote to Client"
    ↓
-10. Client Reviews Products → Selects Buy/Consignment per item
+10. Final Quote Email Sent with Secure Link
    ↓
-11. Client Submits Personal Details + Banking + ID Upload
+11. Client Opens Link → Product Selection Page
+    - Reviews each inspected item with full details
+    - Selects "Buy" or "Consignment" for EACH item
+    - Sees side-by-side pricing comparison
    ↓
-12. Consignment Agreement (if any consignment items)
+12. Client Redirected to 5-Step Details Form:
+    Step 1: Personal Information (Name, ID/Passport, Email, Phone, DOB)
+    Step 2: Address (Physical & Postal addresses)
+    Step 3: Banking Details (Bank, Account, Branch Code - REQUIRED)
+    Step 4: Document Upload (ID, Proof of Address, Bank Confirmation)
+    Step 5: Terms & Conditions
+       - If BUY items: Purchase Agreement (Supplier's Invoice terms)
+       - If CONSIGNMENT items: Consignment Agreement + End Date
+       - ECTA electronic signature notice
+       - POPIA data protection notice
    ↓
-13. Client Confirms → Moves to Awaiting Payment
+13. Client Clicks "Submit & Confirm"
+    - Client selections saved (Buy/Consignment per item)
+    - Client details saved to database
+    - Terms acceptance logged with timestamp
+    - Status: FINAL_QUOTE_SENT → AWAITING_PAYMENT
+    - Token invalidated (one-time use)
    ↓
-14. Admin Notified via Email
+14. Client Sees Thank You Page
+    - "Keysers has received your paperwork!"
+    - Timeline of next steps
    ↓
-15. Staff Marks as Paid → Equipment Enters Inventory
+15. Admin Auto-Notified via Email (admin@keysers.co.za)
+    - Payment Awaiting notification
+    - Customer details, total amount, purchase ID
+    - Link to dashboard
+   ↓
+16. Dashboard Updates Automatically:
+    - Purchase removed from "Incoming Gear"
+    - Purchase appears in "Awaiting Payment" tab
+    - Red badge "1" appears on sidebar
+   ↓
+17. Staff Reviews Awaiting Payment:
+    - Sees instant payment total (BUY items only)
+    - Views all client details (personal, address, banking)
+    - Sees item selections (Buy vs Consignment badges)
+    - Downloads PDF agreements:
+      * Purchase Agreement (for Buy items)
+      * Consignment Agreement (for Consignment items)
+    - Downloads Payment Invoice (complete record)
+   ↓
+18. Staff Clicks "Mark as Paid"
+    - Status: AWAITING_PAYMENT → PAYMENT_RECEIVED
+    - Purchase moves to "Payment Completed" tab
+    - Activity logged for audit trail
+    - Badge count updates
+   ↓
+19. Equipment Ready to Enter Inventory
+    - Buy items: Paid and ready for sale
+    - Consignment items: Tracked for payment on sale
 ```
 
 ### Inspection Workflow
@@ -264,10 +326,16 @@ PENDING_INSPECTION → INSPECTED → READY_FOR_SALE → SOLD
 ```
 PENDING_REVIEW → AWAITING_DELIVERY → INSPECTION_IN_PROGRESS
    ↓
-FINAL_QUOTE_SENT → CLIENT_ACCEPTED → AWAITING_PAYMENT
+FINAL_QUOTE_SENT → (Client submits details) → AWAITING_PAYMENT
    ↓
-PAID → Equipment enters inventory
+PAYMENT_RECEIVED → COMPLETED → Equipment enters inventory
 ```
+
+**Key Status Transitions:**
+- `FINAL_QUOTE_SENT` - After staff sends final quote email
+- `AWAITING_PAYMENT` - After client submits details form (appears in Awaiting Payment tab)
+- `PAYMENT_RECEIVED` - After staff marks as paid (appears in Payment Completed tab)
+- `COMPLETED` - Final state, equipment ready for inventory
 
 ## User Roles & Permissions
 
@@ -326,16 +394,21 @@ PAID → Equipment enters inventory
 - `POST /api/incoming-gear/[id]/notify-client` - Send gear received email after grace period
 - `POST /api/incoming-gear/[id]/start-inspection` - Create inspection session
 - `POST /api/incoming-gear/[id]/send-final-quote` - Send final quote to client
+- `POST /api/incoming-gear/[id]/mark-paid` - Mark purchase as paid (moves to Payment Completed)
 - `GET /api/incoming-gear/pending-items/[id]` - Get item inspection details
 - `PUT /api/incoming-gear/pending-items/[id]/inspection` - Update item inspection data
 
 ### Quote Confirmation (Public)
 - `GET /api/quote-confirmation/[token]` - Get quote details
+- `GET /api/quote-confirmation/[token]/inspection` - Get detailed inspection data
 - `POST /api/quote-confirmation/[token]/tracking` - Submit tracking info
 - `POST /api/quote-confirmation/[token]/decline` - Decline quote
-- `POST /api/quote-confirmation/[token]/accept` - Accept quote
-- `POST /api/quote-confirmation/[token]/submit-details` - Submit client details
-- `POST /api/quote-confirmation/[token]/submit-consignment` - Submit consignment agreement
+- `POST /api/quote-confirmation/[token]/submit-details` - Submit client details with product selections
+
+### Awaiting Payment & PDFs
+- `GET /api/awaiting-payment/[id]/generate-agreement-pdf?type=purchase` - Generate Purchase Agreement PDF
+- `GET /api/awaiting-payment/[id]/generate-agreement-pdf?type=consignment` - Generate Consignment Agreement PDF
+- `GET /api/awaiting-payment/[id]/generate-invoice-pdf` - Generate Payment Invoice PDF
 
 ### Webhooks
 - `POST /api/webhooks/quote-accepted` - Receive bot quote acceptance (requires API key)
@@ -392,9 +465,9 @@ keysers-dashboard/
 │   │       ├── page.tsx           # Quote review
 │   │       ├── shipping/          # Shipping & tracking
 │   │       ├── decline/           # Decline quote
-│   │       ├── details/           # Client details form
-│   │       ├── consignment/       # Consignment agreement
-│   │       └── confirmation/      # Final confirmation
+│   │       ├── select-products/   # Product selection (Buy vs Consignment)
+│   │       ├── details/           # 5-step client details form
+│   │       └── confirmed/         # Thank you confirmation
 │   ├── api/                       # API routes
 │   │   ├── equipment/             # Equipment CRUD
 │   │   ├── vendors/               # Vendor management
@@ -428,9 +501,16 @@ keysers-dashboard/
 
 ## Future Enhancements
 
-### In Progress
-- [ ] Choose accessories checklist layout (4 options in demo page)
-- [ ] Complete consignment workflow integration
+### Recently Completed ✅
+- [x] Client product selection page (Buy vs Consignment)
+- [x] 5-step client details form with validation
+- [x] Dynamic terms & conditions (Purchase + Consignment agreements)
+- [x] Awaiting Payment dashboard with filtering
+- [x] Payment Completed tracking
+- [x] PDF generation (Purchase Agreement, Consignment Agreement, Invoice)
+- [x] Smart payment calculations (instant payment vs consignment)
+- [x] Email notifications for pending payments
+- [x] Sidebar notification badges
 
 ### Planned
 - [ ] Advanced analytics and reporting
@@ -466,6 +546,9 @@ Detailed implementation documentation is available in the following files:
 - **INSPECTION_MODAL_IMPLEMENTATION.md** - Inspection modal implementation details
 - **TEST_INSPECTION_MODAL.md** - Testing guide for inspection modal
 - **UNDO_MARK_AS_RECEIVED.md** - Undo feature implementation and UX details
+- **COMPLETE_QUOTE_FLOW_SUMMARY.md** - End-to-end quote flow from inspection to payment
+- **AWAITING_PAYMENT_ENHANCEMENTS.md** - Payment management and PDF generation
+- **AWAITING_PAYMENT_FIXES.md** - Latest payment page fixes and calculations
 
 ### Testing
 - **scripts/test-sprint1-tracking.sh** - Automated Sprint 1 tests

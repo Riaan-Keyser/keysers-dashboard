@@ -62,10 +62,10 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Check if all items are approved
+    // Check if all items are approved (using approvedAt timestamp for accuracy)
     const incomingItems = purchase.inspectionSession.incomingItems
     const approvedItems = incomingItems.filter(item => 
-      item.verifiedItem && item.verifiedItem.status === "APPROVED"
+      item.verifiedItem && item.verifiedItem.approvedAt !== null
     )
 
     if (approvedItems.length === 0) {

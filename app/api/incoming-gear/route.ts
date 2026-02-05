@@ -16,6 +16,11 @@ export async function GET(request: NextRequest) {
     const where: any = {}
     if (status && status !== "ALL") {
       where.status = status
+    } else if (status === "ALL") {
+      // Exclude payment-related statuses from "ALL" - they appear on the awaiting payment page
+      where.status = {
+        notIn: ["AWAITING_PAYMENT", "PAYMENT_RECEIVED"]
+      }
     }
 
     const pendingPurchases = await prisma.pendingPurchase.findMany({
@@ -23,6 +28,7 @@ export async function GET(request: NextRequest) {
       include: {
         vendor: true,
         items: true,
+        clientDetails: true, // Include client details for AWAITING_PAYMENT status
         reviewedBy: {
           select: { id: true, name: true }
         },
@@ -43,7 +49,13 @@ export async function GET(request: NextRequest) {
                   select: {
                     locked: true,
                     approvedAt: true,
-                    verifiedAt: true
+                    verifiedAt: true,
+                    pricingSnapshot: {
+                      select: {
+                        finalBuyPrice: true,
+                        finalConsignPrice: true
+                      }
+                    }
                   }
                 }
               }
@@ -54,18 +66,68 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" }
     })
 
-    // Convert Decimal fields
-    const serialized = pendingPurchases.map(purchase => ({
-      ...purchase,
-      totalQuoteAmount: purchase.totalQuoteAmount ? parseFloat(purchase.totalQuoteAmount.toString()) : null,
-      items: purchase.items.map(item => ({
-        ...item,
-        botEstimatedPrice: item.botEstimatedPrice ? parseFloat(item.botEstimatedPrice.toString()) : null,
-        proposedPrice: item.proposedPrice ? parseFloat(item.proposedPrice.toString()) : null,
-        finalPrice: item.finalPrice ? parseFloat(item.finalPrice.toString()) : null,
-        suggestedSellPrice: item.suggestedSellPrice ? parseFloat(item.suggestedSellPrice.toString()) : null
-      }))
-    }))
+    // Convert Decimal fields and map inspection items
+    const serialized = pendingPurchases.map(purchase => {
+      // For payment-related statuses, use inspection session items
+      let items = purchase.items
+      const useInspectionItems = ["AWAITING_PAYMENT", "PAYMENT_RECEIVED", "COMPLETED"].includes(purchase.status)
+      
+      if (useInspectionItems && purchase.inspectionSession?.incomingItems) {
+        items = purchase.inspectionSession.incomingItems.map(incomingItem => {
+          const buyPrice = incomingItem.verifiedItem?.pricingSnapshot?.finalBuyPrice 
+            ? parseFloat(incomingItem.verifiedItem.pricingSnapshot.finalBuyPrice.toString())
+            : null
+          const consignPrice = incomingItem.verifiedItem?.pricingSnapshot?.finalConsignPrice
+            ? parseFloat(incomingItem.verifiedItem.pricingSnapshot.finalConsignPrice.toString())
+            : null
+          
+          // Final price depends on what client selected
+          let finalPrice = null
+          if (incomingItem.clientSelection === "BUY") {
+            finalPrice = buyPrice
+          } else if (incomingItem.clientSelection === "CONSIGNMENT") {
+            finalPrice = consignPrice
+          } else {
+            finalPrice = buyPrice || consignPrice // fallback
+          }
+
+          return {
+            id: incomingItem.id,
+            name: incomingItem.clientName,
+            brand: incomingItem.clientBrand,
+            model: incomingItem.clientModel,
+            category: null,
+            condition: incomingItem.clientCondition,
+            finalPrice,
+            clientSelection: incomingItem.clientSelection, // "BUY" or "CONSIGNMENT"
+            buyPrice,
+            consignPrice,
+            status: purchase.status, // Use actual purchase status
+            description: null,
+            serialNumber: null,
+            botEstimatedPrice: null,
+            proposedPrice: null,
+            suggestedSellPrice: null,
+            images: incomingItem.clientImages || []
+          }
+        }) as any
+      } else {
+        items = purchase.items.map(item => ({
+          ...item,
+          botEstimatedPrice: item.botEstimatedPrice ? parseFloat(item.botEstimatedPrice.toString()) : null,
+          proposedPrice: item.proposedPrice ? parseFloat(item.proposedPrice.toString()) : null,
+          finalPrice: item.finalPrice ? parseFloat(item.finalPrice.toString()) : null,
+          suggestedSellPrice: item.suggestedSellPrice ? parseFloat(item.suggestedSellPrice.toString()) : null,
+          clientSelection: null
+        }))
+      }
+
+      return {
+        ...purchase,
+        totalQuoteAmount: purchase.totalQuoteAmount ? parseFloat(purchase.totalQuoteAmount.toString()) : null,
+        items
+      }
+    })
 
     return NextResponse.json(serialized)
   } catch (error) {

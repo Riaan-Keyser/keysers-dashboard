@@ -14,35 +14,12 @@ export async function POST(
     }
 
     const { id } = await params
-    const { paymentAmount, paymentMethod } = await request.json()
 
-    // Get the pending purchase
-    const purchase = await prisma.pendingPurchase.findUnique({
-      where: { id },
-      include: { items: true }
-    })
-
-    if (!purchase) {
-      return NextResponse.json({ error: "Purchase not found" }, { status: 404 })
-    }
-
-    // Update purchase status to paid
-    await prisma.pendingPurchase.update({
+    // Update purchase status to PAYMENT_RECEIVED
+    const purchase = await prisma.pendingPurchase.update({
       where: { id },
       data: {
-        status: "ADDED_TO_INVENTORY",
-        notes: `Payment received: R${paymentAmount} via ${paymentMethod}`
-      }
-    })
-
-    // Update all items to show they're in inventory
-    await prisma.pendingItem.updateMany({
-      where: {
-        pendingPurchaseId: id,
-        status: "APPROVED"
-      },
-      data: {
-        status: "ADDED_TO_INVENTORY"
+        status: "PAYMENT_RECEIVED"
       }
     })
 
@@ -50,20 +27,28 @@ export async function POST(
     await prisma.activityLog.create({
       data: {
         userId: session.user.id,
-        action: "PAYMENT_RECEIVED",
+        action: "MARKED_AS_PAID",
         entityType: "PENDING_PURCHASE",
-        entityId: id,
+        entityId: purchase.id,
         details: JSON.stringify({
           customerName: purchase.customerName,
-          amount: paymentAmount,
-          method: paymentMethod
+          previousStatus: "AWAITING_PAYMENT"
         })
       }
     })
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("POST /api/incoming-gear/[id]/mark-paid error:", error)
-    return NextResponse.json({ error: "Failed to mark as paid" }, { status: 500 })
+    console.log(`✅ Purchase ${id} marked as paid by ${session.user.name}`)
+
+    return NextResponse.json({
+      success: true,
+      message: "Purchase marked as paid"
+    })
+
+  } catch (error: any) {
+    console.error("Error marking purchase as paid:", error)
+    return NextResponse.json({
+      error: "Failed to mark as paid",
+      details: error.message
+    }, { status: 500 })
   }
 }

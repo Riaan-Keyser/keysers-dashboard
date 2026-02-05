@@ -590,6 +590,9 @@ model IncomingGearItem {
   clientCondition    String?
   clientImages       String[] // URLs to client-provided photos
 
+  // Client selection (after final quote sent)
+  clientSelection String? // "BUY" or "CONSIGNMENT" - chosen by client after inspection
+
   // Status
   inspectionStatus InspectionStatus @default(UNVERIFIED)
 

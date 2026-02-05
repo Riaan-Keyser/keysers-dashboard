@@ -132,6 +132,14 @@ export default function IncomingGearPage() {
   const [startingInspection, setStartingInspection] = useState<string | null>(null)
   const [sendingFinalQuote, setSendingFinalQuote] = useState<string | null>(null)
   const [inspectingItemId, setInspectingItemId] = useState<string | null>(null)
+  
+  // Final quote confirmation modal
+  const [showFinalQuoteModal, setShowFinalQuoteModal] = useState(false)
+  const [finalQuoteTarget, setFinalQuoteTarget] = useState<{
+    purchaseId: string
+    customerName: string
+    customerEmail: string
+  } | null>(null)
 
   // Alert Modal
   const [alertModal, setAlertModal] = useState<{
@@ -614,15 +622,19 @@ export default function IncomingGearPage() {
     }
   }
 
-  const handleSendFinalQuote = async (purchaseId: string, customerName: string, customerEmail: string) => {
-    if (!confirm(`Send final quote to ${customerName} (${customerEmail})?\n\nThis will:\n- Email the customer with their final quote\n- Allow them to choose Buy vs Consignment\n- Update status to "Final Quote Sent"`)) {
-      return
-    }
+  const handleSendFinalQuote = (purchaseId: string, customerName: string, customerEmail: string) => {
+    setFinalQuoteTarget({ purchaseId, customerName, customerEmail })
+    setShowFinalQuoteModal(true)
+  }
 
-    setSendingFinalQuote(purchaseId)
+  const confirmSendFinalQuote = async () => {
+    if (!finalQuoteTarget) return
+
+    setSendingFinalQuote(finalQuoteTarget.purchaseId)
+    setShowFinalQuoteModal(false)
 
     try {
-      const response = await fetch(`/api/incoming-gear/${purchaseId}/send-final-quote`, {
+      const response = await fetch(`/api/incoming-gear/${finalQuoteTarget.purchaseId}/send-final-quote`, {
         method: "POST"
       })
 
@@ -651,7 +663,13 @@ export default function IncomingGearPage() {
       })
     } finally {
       setSendingFinalQuote(null)
+      setFinalQuoteTarget(null)
     }
+  }
+
+  const cancelSendFinalQuote = () => {
+    setShowFinalQuoteModal(false)
+    setFinalQuoteTarget(null)
   }
 
   const handleInspectItem = async (purchaseId: string, itemId: string) => {
@@ -1148,34 +1166,39 @@ export default function IncomingGearPage() {
                                   <PackagePlus className="h-5 w-5" />
                                   <span className="font-medium">Add Products</span>
                                 </button>
-                              </div>
-                            )}
-
-                            {/* Send Final Quote Button */}
-                            {purchase.inspectionSession && 
-                             purchase.inspectionSession.incomingItems.length > 0 &&
-                             purchase.inspectionSession.incomingItems.every(
-                               item => item.inspectionStatus === "VERIFIED"
-                             ) && !purchase.finalQuoteSentAt && (
-                              <div className="flex justify-end">
-                                <Button
-                                  onClick={() => handleSendFinalQuote(purchase.id, purchase.customerName, purchase.customerEmail!)}
-                                  disabled={sendingFinalQuote === purchase.id || !purchase.customerEmail}
-                                  className="bg-green-600 hover:bg-green-700"
-                                  size="sm"
-                                >
-                                  {sendingFinalQuote === purchase.id ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                      Sending...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Send className="h-4 w-4 mr-2" />
-                                      Send Final Quote
-                                    </>
-                                  )}
-                                </Button>
+                                
+                                {/* Confirm Button - Send Final Quote */}
+                                {(() => {
+                                  // Check if all items are approved
+                                  const allApproved = purchase.inspectionSession!.incomingItems.every(
+                                    item => item.verifiedItem?.approvedAt
+                                  )
+                                  const hasItems = purchase.inspectionSession!.incomingItems.length > 0
+                                  const alreadySent = purchase.finalQuoteSentAt
+                                  
+                                  if (hasItems && allApproved && !alreadySent) {
+                                    return (
+                                      <button
+                                        onClick={() => handleSendFinalQuote(purchase.id, purchase.customerName, purchase.customerEmail!)}
+                                        disabled={sendingFinalQuote === purchase.id || !purchase.customerEmail}
+                                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg py-4 px-4 transition-all flex items-center justify-center gap-2"
+                                      >
+                                        {sendingFinalQuote === purchase.id ? (
+                                          <>
+                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                            <span>Sending Final Quote...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Send className="h-5 w-5" />
+                                            <span>Confirm - Send Final Quote to Client</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    )
+                                  }
+                                  return null
+                                })()}
                               </div>
                             )}
                           </>
@@ -1443,7 +1466,7 @@ export default function IncomingGearPage() {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && deleteTarget && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-10">
             <div className="p-6">
               <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
                 <Trash2 className="h-6 w-6 text-red-600" />
@@ -1490,6 +1513,60 @@ export default function IncomingGearPage() {
                     <>
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Final Quote Confirmation Modal */}
+      {showFinalQuoteModal && finalQuoteTarget && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-10">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-blue-100 rounded-full mb-4">
+                <Send className="h-6 w-6 text-blue-600" />
+              </div>
+              
+              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                Send final quote to {finalQuoteTarget.customerName} ({finalQuoteTarget.customerEmail})?
+              </h3>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-gray-700 font-medium mb-2">This will:</p>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>- Email the customer with their final quote</li>
+                  <li>- Allow them to choose Buy vs Consignment</li>
+                  <li>- Update status to "Final Quote Sent"</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={cancelSendFinalQuote}
+                  variant="outline"
+                  className="flex-1"
+                  disabled={sendingFinalQuote === finalQuoteTarget.purchaseId}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmSendFinalQuote}
+                  disabled={sendingFinalQuote === finalQuoteTarget.purchaseId}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {sendingFinalQuote === finalQuoteTarget.purchaseId ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      OK
                     </>
                   )}
                 </Button>

@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 import { 
   LayoutDashboard, 
   Package, 
@@ -40,6 +41,28 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [awaitingPaymentCount, setAwaitingPaymentCount] = useState(0)
+
+  useEffect(() => {
+    // Fetch awaiting payment count
+    const fetchCount = async () => {
+      try {
+        const response = await fetch("/api/incoming-gear?status=AWAITING_PAYMENT")
+        if (response.ok) {
+          const data = await response.json()
+          setAwaitingPaymentCount(data.length || 0)
+        }
+      } catch (error) {
+        console.error("Failed to fetch awaiting payment count:", error)
+      }
+    }
+
+    fetchCount()
+
+    // Refresh count every 30 seconds
+    const interval = setInterval(fetchCount, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-900 text-white">
@@ -50,11 +73,13 @@ export function Sidebar() {
         {navItems.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon
+          const showBadge = item.href === "/dashboard/awaiting-payment" && awaitingPaymentCount > 0
+          
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors relative ${
                 isActive
                   ? "bg-blue-600 text-white"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
@@ -62,6 +87,11 @@ export function Sidebar() {
             >
               <Icon className="h-5 w-5" />
               {item.name}
+              {showBadge && (
+                <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                  {awaitingPaymentCount}
+                </span>
+              )}
             </Link>
           )
         })}

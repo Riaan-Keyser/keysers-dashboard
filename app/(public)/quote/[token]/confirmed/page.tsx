@@ -1,7 +1,6 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { CheckCircle, Mail, Clock, Package, CreditCard } from "lucide-react"
 import Link from "next/link"
 
@@ -17,15 +16,16 @@ export default function ConfirmedPage() {
         </div>
         
         <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-          Quote Confirmed! 🎉
+          Thank You! 🎉
         </h1>
         
         <p className="text-lg text-gray-700 mb-2">
-          Thank you for submitting your details!
+          Keysers has received your paperwork!
         </p>
         
         <p className="text-gray-600">
-          We've received your information and will contact you shortly regarding payment.
+          We have everything we need and will proceed with your request. 
+          You'll be contacted shortly regarding payment and next steps.
         </p>
       </Card>
 
@@ -117,17 +117,20 @@ export default function ConfirmedPage() {
           If you have any questions or concerns, please don't hesitate to contact us:
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button variant="outline" asChild>
-            <a href="mailto:admin@keysers.co.za">
-              <Mail className="h-4 w-4 mr-2" />
-              admin@keysers.co.za
-            </a>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="https://keysers.co.za" target="_blank">
-              Visit Website
-            </Link>
-          </Button>
+          <a 
+            href="mailto:admin@keysers.co.za"
+            className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 border border-gray-300 bg-transparent hover:bg-gray-100 h-10 px-4 py-2"
+          >
+            <Mail className="h-4 w-4 mr-2" />
+            admin@keysers.co.za
+          </a>
+          <Link 
+            href="https://keysers.co.za" 
+            target="_blank"
+            className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 border border-gray-300 bg-transparent hover:bg-gray-100 h-10 px-4 py-2"
+          >
+            Visit Website
+          </Link>
         </div>
       </Card>
 

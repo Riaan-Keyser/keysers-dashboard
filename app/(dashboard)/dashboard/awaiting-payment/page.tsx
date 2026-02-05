@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CreditCard, User, Mail, Phone, CheckCircle, Eye, Send, Calendar, Package, AlertCircle } from "lucide-react"
+import { CreditCard, User, Mail, Phone, CheckCircle, Eye, Send, Calendar, Package, AlertCircle, Download, FileText, ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -34,6 +34,9 @@ interface PendingItem {
   category: string | null
   condition: string | null
   finalPrice: number | null
+  clientSelection: string | null // "BUY" or "CONSIGNMENT"
+  buyPrice?: number | null
+  consignPrice?: number | null
 }
 
 interface AwaitingPaymentPurchase {
@@ -72,46 +75,52 @@ export default function AwaitingPaymentPage() {
   const [purchases, setPurchases] = useState<AwaitingPaymentPurchase[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedPurchase, setExpandedPurchase] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<"AWAITING_PAYMENT" | "PAYMENT_RECEIVED">("AWAITING_PAYMENT")
 
   useEffect(() => {
     fetchAwaitingPayment()
-  }, [])
+  }, [statusFilter])
 
   const fetchAwaitingPayment = async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/incoming-gear?status=AWAITING_PAYMENT")
+      const response = await fetch(`/api/incoming-gear?status=${statusFilter}`)
       const data = await response.json()
-      setPurchases(data.purchases || [])
+      
+      // API returns array directly, not wrapped in { purchases: [] }
+      const purchases = Array.isArray(data) ? data : []
+      console.log(`📦 ${statusFilter} purchases:`, purchases.length)
+      setPurchases(purchases)
     } catch (error) {
-      console.error("Failed to fetch awaiting payment:", error)
+      console.error("Failed to fetch purchases:", error)
     } finally {
       setLoading(false)
     }
   }
 
   const handleMarkAsPaid = async (purchaseId: string) => {
-    if (!confirm("Mark this purchase as paid? This will move it to completed.")) return
+    if (!confirm("Mark this purchase as paid? This will move it to Payment Completed.")) return
 
     try {
-      const response = await fetch(`/api/incoming-gear/${purchaseId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          status: "PAYMENT_RECEIVED",
-          action: "mark-paid"
-        })
+      const response = await fetch(`/api/incoming-gear/${purchaseId}/mark-paid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
       })
 
       if (response.ok) {
         alert("✅ Marked as paid!")
         fetchAwaitingPayment()
       } else {
-        alert("Failed to update status")
+        const data = await response.json()
+        alert(data.error || "Failed to update status")
       }
     } catch (error) {
       alert("Failed to update status")
     }
+  }
+
+  const handleGenerateInvoice = (purchaseId: string) => {
+    window.open(`/api/awaiting-payment/${purchaseId}/generate-invoice-pdf`, '_blank')
   }
 
   const toggleExpand = (purchaseId: string) => {
@@ -134,9 +143,9 @@ export default function AwaitingPaymentPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Awaiting Payment</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Payment Management</h1>
           <p className="text-gray-600 mt-1">
-            Clients who have accepted quotes and submitted their details
+            Track payments and completed transactions
           </p>
         </div>
         <Badge variant="default" className="text-lg px-4 py-2">
@@ -144,8 +153,32 @@ export default function AwaitingPaymentPage() {
         </Badge>
       </div>
 
+      {/* Filter Tabs */}
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setStatusFilter("AWAITING_PAYMENT")}
+          className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+            statusFilter === "AWAITING_PAYMENT"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          ⏳ Awaiting Payment
+        </button>
+        <button
+          onClick={() => setStatusFilter("PAYMENT_RECEIVED")}
+          className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+            statusFilter === "PAYMENT_RECEIVED"
+              ? "border-green-600 text-green-600"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          ✅ Payment Completed
+        </button>
+      </div>
+
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <CreditCard className="h-8 w-8 text-green-500" />
@@ -156,15 +189,52 @@ export default function AwaitingPaymentPage() {
           </div>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-gray-500">Total Items</p>
-          <p className="text-2xl font-bold">
-            {purchases.reduce((sum, p) => sum + p.items.length, 0)}
-          </p>
+          <div className="flex items-center gap-3">
+            <Package className="h-8 w-8 text-blue-500" />
+            <div>
+              <p className="text-sm text-gray-500">Total Items</p>
+              <p className="text-2xl font-bold">
+                {purchases.reduce((sum, p) => sum + p.items.length, 0)}
+              </p>
+            </div>
+          </div>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-gray-500">Total Value</p>
+          <div className="flex items-center gap-3">
+            <CreditCard className="h-8 w-8 text-green-500" />
+            <div>
+              <p className="text-sm text-gray-500">Buy Items</p>
+              <p className="text-2xl font-bold">
+                {purchases.reduce((sum, p) => 
+                  sum + p.items.filter(item => item.clientSelection === "BUY").length, 0
+                )}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <ShoppingCart className="h-8 w-8 text-purple-500" />
+            <div>
+              <p className="text-sm text-gray-500">Consignment Items</p>
+              <p className="text-2xl font-bold">
+                {purchases.reduce((sum, p) => 
+                  sum + p.items.filter(item => item.clientSelection === "CONSIGNMENT").length, 0
+                )}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-gray-500">Total Payable Value</p>
           <p className="text-2xl font-bold text-green-600">
-            {formatPrice(purchases.reduce((sum, p) => sum + (p.totalQuoteAmount || 0), 0))}
+            {formatPrice(purchases.reduce((sum, p) => {
+              // Calculate only BUY items (instant payment)
+              const buyTotal = p.items
+                .filter(item => item.clientSelection === "BUY")
+                .reduce((itemSum, item) => itemSum + (item.finalPrice || 0), 0)
+              return sum + buyTotal
+            }, 0))}
           </p>
         </Card>
       </div>
@@ -173,17 +243,23 @@ export default function AwaitingPaymentPage() {
       {purchases.length === 0 ? (
         <Card className="p-12 text-center">
           <CreditCard className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No Pending Payments</h3>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            {statusFilter === "AWAITING_PAYMENT" ? "No Pending Payments" : "No Completed Payments"}
+          </h3>
           <p className="text-gray-600">
-            Purchases will appear here when clients accept quotes and submit their details.
+            {statusFilter === "AWAITING_PAYMENT" 
+              ? "Purchases will appear here when clients accept quotes and submit their details."
+              : "Purchases will appear here after you mark them as paid."}
           </p>
         </Card>
       ) : (
         /* Purchases list */
         <div className="space-y-4">
           {purchases.map((purchase) => {
-            const total = purchase.totalQuoteAmount || 
-              purchase.items.reduce((sum, item) => sum + (item.finalPrice || 0), 0)
+            // Calculate total for BUY items only (instant payment)
+            const buyTotal = purchase.items
+              .filter(item => item.clientSelection === "BUY")
+              .reduce((sum, item) => sum + (item.finalPrice || 0), 0)
             const isExpanded = expandedPurchase === purchase.id
 
             return (
@@ -191,15 +267,21 @@ export default function AwaitingPaymentPage() {
                 {/* Purchase Header - Collapsible */}
                 <button
                   onClick={() => toggleExpand(purchase.id)}
-                  className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
+                  className="w-full p-6 hover:shadow-md transition-shadow text-left"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
                         {purchase.customerName}
-                        <Badge variant="success" className="ml-2">
-                          Quote Accepted
-                        </Badge>
+                        {statusFilter === "AWAITING_PAYMENT" ? (
+                          <Badge variant="default" className="ml-2 bg-yellow-500">
+                            Awaiting Payment
+                          </Badge>
+                        ) : (
+                          <Badge variant="success" className="ml-2">
+                            Payment Completed
+                          </Badge>
+                        )}
                       </h3>
                       
                       {/* Client contact info (compact view) */}
@@ -224,9 +306,9 @@ export default function AwaitingPaymentPage() {
                     </div>
 
                     <div className="text-right ml-4">
-                      <p className="text-sm text-gray-500 mb-1">Total Amount</p>
+                      <p className="text-sm text-gray-500 mb-1">Instant Payment Total</p>
                       <p className="text-3xl font-bold text-green-600">
-                        {formatPrice(total)}
+                        {formatPrice(buyTotal)}
                       </p>
                       {purchase.clientAcceptedAt && (
                         <p className="text-xs text-gray-500 mt-2">
@@ -313,7 +395,7 @@ export default function AwaitingPaymentPage() {
                       </div>
                     )}
 
-                    {/* Items List */}
+                    {/* Items List with Client Selections */}
                     <div>
                       <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
                         <Package className="h-5 w-5" />
@@ -321,18 +403,121 @@ export default function AwaitingPaymentPage() {
                       </h4>
                       <div className="space-y-2">
                         {purchase.items.map((item) => (
-                          <div key={item.id} className="bg-white rounded-lg p-3 flex justify-between items-center">
-                            <div>
-                              <p className="font-medium text-gray-900">{item.name}</p>
-                              <p className="text-sm text-gray-600">
-                                {item.brand} {item.model && `• ${item.model}`} {item.condition && `• ${item.condition}`}
-                              </p>
+                          <div key={item.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="font-medium text-gray-900">{item.name}</p>
+                                  {item.clientSelection && (
+                                    <Badge 
+                                      variant={item.clientSelection === "BUY" ? "success" : "default"}
+                                      className="text-xs"
+                                    >
+                                      {item.clientSelection === "BUY" ? (
+                                        <>
+                                          <CreditCard className="h-3 w-3 mr-1" />
+                                          Buy
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ShoppingCart className="h-3 w-3 mr-1" />
+                                          Consignment
+                                        </>
+                                      )}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  {item.brand} {item.model && `• ${item.model}`} {item.condition && `• ${item.condition}`}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-lg font-bold text-gray-900">
+                                  {formatPrice(item.finalPrice)}
+                                </p>
+                                {item.clientSelection && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {item.clientSelection === "BUY" ? "Instant Payment" : "Pay on Sale"}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            <p className="text-lg font-bold text-gray-900">
-                              {formatPrice(item.finalPrice)}
-                            </p>
                           </div>
                         ))}
+                      </div>
+                    </div>
+
+                    {/* Agreement PDFs */}
+                    <div>
+                      <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Client Agreements
+                      </h4>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        {(() => {
+                          const hasBuy = purchase.items.some(item => item.clientSelection === "BUY")
+                          const hasConsignment = purchase.items.some(item => item.clientSelection === "CONSIGNMENT")
+                          
+                          return (
+                            <>
+                              {hasBuy && (
+                                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <CreditCard className="h-5 w-5 text-green-600" />
+                                    <p className="font-medium text-gray-900">Purchase Agreement</p>
+                                  </div>
+                                  <p className="text-xs text-gray-600 mb-3">
+                                    Supplier's Invoice for items being purchased
+                                  </p>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => window.open(`/api/awaiting-payment/${purchase.id}/generate-agreement-pdf?type=purchase`, '_blank')}
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download PDF
+                                  </Button>
+                                </div>
+                              )}
+                              
+                              {hasConsignment && (
+                                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <ShoppingCart className="h-5 w-5 text-blue-600" />
+                                    <p className="font-medium text-gray-900">Consignment Agreement</p>
+                                  </div>
+                                  <p className="text-xs text-gray-600 mb-3">
+                                    Agreement for items on consignment
+                                  </p>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => window.open(`/api/awaiting-payment/${purchase.id}/generate-agreement-pdf?type=consignment`, '_blank')}
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download PDF
+                                  </Button>
+                                </div>
+                              )}
+
+                              {!hasBuy && !hasConsignment && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 md:col-span-2">
+                                  <div className="flex items-start gap-2">
+                                    <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="font-medium text-yellow-900 text-sm">No Selection Information</p>
+                                      <p className="text-yellow-700 text-xs mt-1">
+                                        Client selections (Buy vs Consignment) not available. This may be from an older quote.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )
+                        })()}
                       </div>
                     </div>
 
@@ -354,34 +539,49 @@ export default function AwaitingPaymentPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex gap-3 pt-4 border-t">
-                      <Button
-                        size="sm"
-                        onClick={() => handleMarkAsPaid(purchase.id)}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Mark as Paid
-                      </Button>
+                    <div className="flex flex-wrap gap-3 pt-4 border-t">
+                      {statusFilter === "AWAITING_PAYMENT" && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleMarkAsPaid(purchase.id)}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Mark as Paid
+                        </Button>
+                      )}
                       
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => window.open(`mailto:${purchase.clientDetails?.email}?subject=Payment Reminder for Quote ${purchase.id.slice(0, 8)}`)}
+                        onClick={() => handleGenerateInvoice(purchase.id)}
                       >
-                        <Send className="h-4 w-4 mr-2" />
-                        Send Reminder
+                        <FileText className="h-4 w-4 mr-2" />
+                        Generate Invoice PDF
                       </Button>
+                      
+                      {statusFilter === "AWAITING_PAYMENT" && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(`mailto:${purchase.clientDetails?.email}?subject=Payment Reminder for Quote ${purchase.id.slice(0, 8)}`)}
+                          >
+                            <Send className="h-4 w-4 mr-2" />
+                            Send Reminder
+                          </Button>
 
-                      {purchase.clientDetails && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => window.open(`tel:${purchase.clientDetails?.phone}`)}
-                        >
-                          <Phone className="h-4 w-4 mr-2" />
-                          Call Client
-                        </Button>
+                          {purchase.clientDetails && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(`tel:${purchase.clientDetails?.phone}`)}
+                            >
+                              <Phone className="h-4 w-4 mr-2" />
+                              Call Client
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
 
@@ -407,5 +607,4 @@ export default function AwaitingPaymentPage() {
       )}
     </div>
   )
-}
 }
