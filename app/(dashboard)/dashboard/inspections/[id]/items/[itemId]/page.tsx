@@ -247,34 +247,17 @@ export default function ItemVerificationPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        // Silent fail - just log for debugging if needed
-        if (process.env.NODE_ENV === 'development') {
-          console.log("Product identification response:", response.status, errorData)
-        }
+        console.error("Product identification failed:", response.status, errorData)
+        setAlertModal({
+          isOpen: true,
+          message: errorData.error || "Failed to identify product",
+          type: "error"
+        })
         return
       }
       
-      const data = await response.json()
-      
-      // Load question templates and accessories
-      if (data.verifiedItem?.product) {
-        setQuestions(data.verifiedItem.product.questionTemplates || [])
-        setAccessories(data.verifiedItem.product.accessories || [])
-        
-        // Initialize accessories state
-        const accMap: Record<string, { isPresent: boolean; notes: string }> = {}
-        data.verifiedItem.product.accessories.forEach((acc: AccessoryTemplate) => {
-          accMap[acc.accessoryName] = { isPresent: false, notes: "" }
-        })
-        setAccessoryStates(accMap)
-
-        // Initialize answers state
-        const ansMap: Record<string, { answer: string; notes: string }> = {}
-        data.verifiedItem.product.questionTemplates.forEach((q: QuestionTemplate) => {
-          ansMap[q.question] = { answer: "NOT_TESTED", notes: "" }
-        })
-        setAnswers(ansMap)
-      }
+      // Refresh item data to get updated clientName and all related data
+      await fetchItem()
     } catch (error) {
       // Silent fail - product is already selected in UI, no need to show error
       if (process.env.NODE_ENV === 'development') {

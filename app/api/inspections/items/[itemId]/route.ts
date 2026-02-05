@@ -131,6 +131,12 @@ export async function POST(
 
     if (incomingItem.verifiedItem) {
       // Update existing verified item (re-identification)
+      console.log(`🔄 RE-IDENTIFYING product for item ${itemId}:`, {
+        oldProduct: incomingItem.verifiedItem.productId,
+        newProduct: productId,
+        newProductName: product.name
+      })
+      
       verifiedItem = await prisma.verifiedGearItem.update({
         where: { id: incomingItem.verifiedItem.id },
         data: {
@@ -157,10 +163,12 @@ export async function POST(
       })
 
       // Update incoming item name to the new product name
-      await prisma.incomingGearItem.update({
+      const updatedIncomingItem = await prisma.incomingGearItem.update({
         where: { id: itemId },
         data: { clientName: product.name }
       })
+      
+      console.log(`✅ Updated IncomingGearItem clientName from "${incomingItem.clientName}" to "${updatedIncomingItem.clientName}"`)
 
       // Log re-identification
       await prisma.activityLog.create({
@@ -178,6 +186,11 @@ export async function POST(
       })
     } else {
       // Create new verified item
+      console.log(`✨ IDENTIFYING new product for item ${itemId}:`, {
+        product: productId,
+        productName: product.name
+      })
+      
       verifiedItem = await prisma.verifiedGearItem.create({
         data: {
           incomingItemId: itemId,
@@ -201,13 +214,15 @@ export async function POST(
       })
 
       // Update incoming item status and name
-      await prisma.incomingGearItem.update({
+      const updatedIncomingItem = await prisma.incomingGearItem.update({
         where: { id: itemId },
         data: { 
           inspectionStatus: "IN_PROGRESS",
           clientName: product.name // Update to the identified product name
         }
       })
+      
+      console.log(`✅ Updated IncomingGearItem clientName from "${incomingItem.clientName}" to "${updatedIncomingItem.clientName}"`)
 
       // Log identification
       await prisma.activityLog.create({
