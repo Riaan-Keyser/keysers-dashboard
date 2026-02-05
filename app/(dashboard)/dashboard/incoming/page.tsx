@@ -381,10 +381,20 @@ export default function IncomingGearPage() {
         // Navigate to verify page for the new item
         window.location.href = `/dashboard/inspections/${sessionId}/items/${newItem.id}`
       } else {
-        console.error("Failed to add product")
+        const data = await response.json()
+        setAlertModal({
+          isOpen: true,
+          message: data.error || "Failed to add product",
+          type: "error"
+        })
       }
     } catch (error) {
       console.error("Failed to add product:", error)
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to add product. Please try again.",
+        type: "error"
+      })
     }
   }
 

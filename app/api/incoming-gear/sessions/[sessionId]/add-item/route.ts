@@ -28,13 +28,14 @@ export async function POST(
     // Create a new IncomingGearItem
     const newItem = await prisma.incomingGearItem.create({
       data: {
-        inspectionSessionId: sessionId,
+        sessionId: sessionId,
         clientName: body.clientName || "New Product",
         clientBrand: body.clientBrand || null,
         clientModel: body.clientModel || null,
         clientDescription: body.clientDescription || null,
         clientSerialNumber: null,
         clientCondition: null,
+        clientImages: [],
         inspectionStatus: "PENDING"
       }
     })
