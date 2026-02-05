@@ -111,18 +111,6 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
     return () => clearTimeout(timer)
   }, [searchTerm, initialSearch, searchProducts])
 
-  // Click outside handler to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setShowResults(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
   return (
     <div className="relative" ref={containerRef}>
       <div className="relative">
@@ -165,10 +153,10 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
         <Card className="absolute z-50 w-full mt-2 max-h-96 overflow-y-auto shadow-lg">
           <div className="p-2 space-y-1">
             {products.map((product) => (
-              <button
+              <div
                 key={product.id}
-                type="button"
-                onMouseDown={(e) => {
+                onClick={(e) => {
+                  e.preventDefault()
                   e.stopPropagation()
                   handleSelect(product)
                 }}
@@ -201,7 +189,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
                     </p>
                   </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </Card>
