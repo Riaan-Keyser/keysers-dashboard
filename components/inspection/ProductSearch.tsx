@@ -80,10 +80,10 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
     setSearchTerm(product.name)
     onSelect(product)
     
-    // Reset the flag after a short delay
+    // Reset the flag after a delay
     setTimeout(() => {
       justSelectedRef.current = false
-    }, 300)
+    }, 500)
   }, [onSelect])
 
   // Auto-search when component mounts with initialSearch
@@ -132,10 +132,18 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
             }
           }}
           onFocus={() => {
-            // Don't reopen dropdown if user just selected a product
-            if (products.length > 0 && !justSelectedRef.current && !selectedProduct) {
+            // Don't reopen dropdown if user just selected a product or if already selected
+            if (!justSelectedRef.current && !selectedProduct && products.length > 0) {
               setShowResults(true)
             }
+          }}
+          onBlur={() => {
+            // Close dropdown when clicking outside (after a small delay to allow click to register)
+            setTimeout(() => {
+              if (!justSelectedRef.current) {
+                setShowResults(false)
+              }
+            }, 150)
           }}
           placeholder="Search by brand, model, or name..."
           className="pl-10"
@@ -151,11 +159,10 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
                 key={product.id}
                 type="button"
                 onMouseDown={(e) => {
-                  e.preventDefault()
                   e.stopPropagation()
                   handleSelect(product)
                 }}
-                className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors"
+                className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
