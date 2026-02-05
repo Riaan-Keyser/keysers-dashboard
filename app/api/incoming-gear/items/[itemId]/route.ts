@@ -20,7 +20,7 @@ export async function DELETE(
       where: { id: itemId },
       include: {
         verifiedItem: true,
-        inspectionSession: {
+        session: {
           include: {
             pendingPurchase: true
           }
@@ -36,19 +36,19 @@ export async function DELETE(
 
       // Check if this was the last item in the inspection session
       const remainingItems = await prisma.incomingGearItem.count({
-        where: { inspectionSessionId: incomingItem.inspectionSessionId }
+        where: { sessionId: incomingItem.sessionId }
       })
 
       // If no items left, delete the inspection session and update purchase status
-      if (remainingItems === 0 && incomingItem.inspectionSession) {
+      if (remainingItems === 0 && incomingItem.session) {
         await prisma.inspectionSession.delete({
-          where: { id: incomingItem.inspectionSessionId }
+          where: { id: incomingItem.sessionId }
         })
 
         // Update purchase status back to PENDING_REVIEW
-        if (incomingItem.inspectionSession.pendingPurchase) {
+        if (incomingItem.session.pendingPurchase) {
           await prisma.pendingPurchase.update({
-            where: { id: incomingItem.inspectionSession.pendingPurchase.id },
+            where: { id: incomingItem.session.pendingPurchase.id },
             data: {
               status: "PENDING_REVIEW",
               inspectionSessionId: null
