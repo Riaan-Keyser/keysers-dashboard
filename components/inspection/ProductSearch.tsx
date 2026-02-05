@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Search, Check } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -35,9 +35,6 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [hasAutoSelected, setHasAutoSelected] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const justSelectedRef = useRef(false)
 
   // Debounced search
   const searchProducts = useCallback(
@@ -75,26 +72,10 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   )
 
   const handleSelect = useCallback((product: Product) => {
-    // Immediately set all states to prevent any interference
-    justSelectedRef.current = true
-    
-    // Blur the input to prevent any focus events
-    if (inputRef.current) {
-      inputRef.current.blur()
-    }
-    
     setSelectedProduct(product)
     setSearchTerm(product.name)
     setShowResults(false)
-    setProducts([]) // Clear products to prevent dropdown from showing
-    
-    // Call parent handler
     onSelect(product)
-    
-    // Keep flag set to prevent any reopening
-    setTimeout(() => {
-      justSelectedRef.current = false
-    }, 2000)
   }, [onSelect])
 
   // Auto-search when component mounts with initialSearch
@@ -116,37 +97,21 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   }, [searchTerm, initialSearch, searchProducts])
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
-          ref={inputRef}
           type="text"
           value={searchTerm}
           onChange={(e) => {
-            const newValue = e.target.value
-            setSearchTerm(newValue)
-            
-            if (!newValue) {
-              // Clear everything if input is empty
+            setSearchTerm(e.target.value)
+            if (!e.target.value) {
               setSelectedProduct(null)
               setProducts([])
-              setShowResults(false)
-            } else if (selectedProduct && newValue !== selectedProduct.name) {
-              // User is editing after selection - clear selection
-              setSelectedProduct(null)
-              setShowResults(true)
-            } else if (!selectedProduct) {
-              // Only show results when actively typing and no product selected
-              setShowResults(true)
             }
           }}
           onFocus={() => {
-            // Never reopen if product is selected
-            if (selectedProduct) return
-            
-            // Only show dropdown if typing and no product selected yet
-            if (searchTerm.length >= 2 && products.length > 0 && !justSelectedRef.current) {
+            if (products.length > 0) {
               setShowResults(true)
             }
           }}
@@ -160,16 +125,12 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
         <Card className="absolute z-50 w-full mt-2 max-h-96 overflow-y-auto shadow-lg">
           <div className="p-2 space-y-1">
             {products.map((product) => (
-              <div
+              <button
                 key={product.id}
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  handleSelect(product)
-                }}
-                className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+                onClick={() => handleSelect(product)}
+                className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors"
               >
-                <div className="flex items-start justify-between pointer-events-none">
+                <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-gray-900">{product.name}</p>
@@ -196,7 +157,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
                     </p>
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </Card>
