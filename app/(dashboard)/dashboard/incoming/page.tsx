@@ -341,6 +341,32 @@ export default function IncomingGearPage() {
     setDeleteTarget(null)
   }
 
+  const handleAddProduct = async (sessionId: string) => {
+    try {
+      const response = await fetch(`/api/incoming-gear/sessions/${sessionId}/add-item`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientName: "New Product",
+          clientBrand: null,
+          clientModel: null,
+          clientDescription: null
+        })
+      })
+
+      if (response.ok) {
+        const newItem = await response.json()
+        // Navigate to verify page for the new item
+        window.location.href = `/dashboard/inspections/${sessionId}/items/${newItem.id}`
+      } else {
+        alert("Failed to add product")
+      }
+    } catch (error) {
+      console.error("Failed to add product:", error)
+      alert("Failed to add product")
+    }
+  }
+
   const openLightbox = (images: string[], index: number) => {
     setLightboxImages(images)
     setLightboxIndex(index)
@@ -1007,7 +1033,7 @@ export default function IncomingGearPage() {
                                             )}
                                           </p>
                                         </div>
-                                        <div className="flex items-center justify-center min-w-[120px]">
+                                        <div className="flex items-center justify-center min-w-[100px]">
                                           {getStatusBadge()}
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -1030,10 +1056,7 @@ export default function IncomingGearPage() {
                                 
                                 {/* Add Products Button */}
                                 <button
-                                  onClick={() => {
-                                    // TODO: Implement add product functionality
-                                    alert("Add product functionality coming soon!")
-                                  }}
+                                  onClick={() => handleAddProduct(purchase.inspectionSessionId!)}
                                   className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg py-6 px-4 hover:border-blue-400 hover:bg-blue-50 transition-all text-gray-600 hover:text-blue-600 flex items-center justify-center gap-2"
                                 >
                                   <PackagePlus className="h-5 w-5" />
