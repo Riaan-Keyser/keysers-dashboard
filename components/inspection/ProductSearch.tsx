@@ -150,13 +150,10 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
               <button
                 key={product.id}
                 type="button"
-                onClick={(e) => {
+                onMouseDown={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
                   handleSelect(product)
-                }}
-                onMouseDown={(e) => {
-                  e.preventDefault()
                 }}
                 className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors"
               >
