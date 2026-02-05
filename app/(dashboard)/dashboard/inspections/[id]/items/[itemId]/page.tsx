@@ -493,7 +493,7 @@ export default function ItemVerificationPage() {
       <div className="mt-8">
         {/* STEP 1: IDENTIFY PRODUCT */}
         {currentStep === 0 && (
-          <Card className="p-6">
+          <Card className="p-6 min-h-[400px]">
             <h2 className="text-xl font-semibold mb-4">Identify Product</h2>
             <p className="text-gray-600 mb-6">
               Search for and select the canonical product that matches this item

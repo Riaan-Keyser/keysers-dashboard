@@ -113,14 +113,18 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
   // Debounced manual search (when user types)
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Don't search if a product is already selected
-      if (searchTerm && !selectedProduct) {
+      if (searchTerm && searchTerm.length >= 2) {
+        // Search even if product is selected - allows replacing selection
         searchProducts(searchTerm, false)
+      } else if (!searchTerm) {
+        // Clear products when search is empty
+        setProducts([])
+        setShowResults(false)
       }
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, searchProducts, selectedProduct])
+  }, [searchTerm, searchProducts])
 
   return (
     <div className="relative">
@@ -135,8 +139,8 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
             e.target.select()
             setHasUserInteracted(true)
             
-            // Show dropdown if we have results
-            if (products.length > 0) {
+            // Show dropdown if we have results AND a search term
+            if (products.length > 0 && searchTerm.length >= 2) {
               setShowResults(true)
             }
           }}
@@ -145,9 +149,8 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
             setSearchTerm(newValue)
             setHasUserInteracted(true)
             
-            // Only clear the selected product if user explicitly clears the search bar
-            // Don't clear just because they're typing a new search
-            if (!newValue && selectedProduct) {
+            // If search is cleared, reset everything
+            if (!newValue) {
               setSelectedProduct(null)
               setProducts([])
               setShowResults(false)
@@ -159,7 +162,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
       </div>
 
       {/* Search Results Dropdown */}
-      {showResults && products.length > 0 && (
+      {showResults && searchTerm.length >= 2 && products.length > 0 && (
         <Card className="absolute z-50 w-full mt-2 max-h-96 overflow-y-auto shadow-lg">
           <div className="p-2 space-y-1">
             {products.map((product) => (
