@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Search, Check } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -35,6 +35,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [hasAutoSelected, setHasAutoSelected] = useState(false)
+  const hasInitialSearchRun = useRef(false)
 
   // Debounced search
   const searchProducts = useCallback(
@@ -79,12 +80,13 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
     onSelect(product)
   }, [onSelect])
 
-  // Auto-search when component mounts with initialSearch
+  // Auto-search when component mounts with initialSearch (only once)
   useEffect(() => {
-    if (initialSearch && initialSearch.length >= 2 && !selectedProduct) {
+    if (initialSearch && initialSearch.length >= 2 && !hasInitialSearchRun.current) {
+      hasInitialSearchRun.current = true
       searchProducts(initialSearch, autoSelect)
     }
-  }, [initialSearch, autoSelect, searchProducts, selectedProduct])
+  }, [initialSearch, autoSelect, searchProducts])
 
   // Debounced manual search (when user types)
   useEffect(() => {
@@ -106,10 +108,19 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
           type="text"
           value={searchTerm}
           onChange={(e) => {
-            setSearchTerm(e.target.value)
-            if (!e.target.value) {
+            const newValue = e.target.value
+            setSearchTerm(newValue)
+            
+            // Clear selection if user is editing
+            if (selectedProduct && newValue !== selectedProduct.name) {
+              setSelectedProduct(null)
+            }
+            
+            // Clear everything if input is empty
+            if (!newValue) {
               setSelectedProduct(null)
               setProducts([])
+              setShowResults(false)
             }
           }}
           onFocus={() => {
@@ -211,7 +222,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
       )}
 
       {/* No results */}
-      {searchTerm.length >= 2 && !loading && products.length === 0 && (
+      {searchTerm.length >= 2 && !loading && products.length === 0 && !selectedProduct && (
         <div className="absolute top-full left-0 right-0 mt-2">
           <Card className="p-4 text-center text-sm text-gray-600">
             No products found. Try a different search term.
