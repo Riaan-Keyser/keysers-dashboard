@@ -136,35 +136,28 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
         <Input
           type="text"
           value={searchTerm}
+          autoComplete="off"
           onFocus={(e) => {
-            // Clear the initial search text on first focus to allow immediate typing
-            if (!hasUserInteracted && searchTerm === initialSearch && !selectedProduct) {
-              setSearchTerm("")
-              setHasUserInteracted(true)
-            }
-            // Select all text for easy replacement
+            // Always select all text for easy replacement when clicking in search bar
             e.target.select()
+            setHasUserInteracted(true)
+            
+            // Show dropdown if we have results
+            if (products.length > 0) {
+              setShowResults(true)
+            }
           }}
           onChange={(e) => {
             const newValue = e.target.value
             setSearchTerm(newValue)
             setHasUserInteracted(true)
             
-            // Clear selection if user is editing
-            if (selectedProduct && newValue !== selectedProduct.name) {
-              setSelectedProduct(null)
-            }
-            
-            // Clear everything if input is empty
-            if (!newValue) {
+            // Only clear the selected product if user explicitly clears the search bar
+            // Don't clear just because they're typing a new search
+            if (!newValue && selectedProduct) {
               setSelectedProduct(null)
               setProducts([])
               setShowResults(false)
-            }
-          }}
-          onFocus={() => {
-            if (products.length > 0) {
-              setShowResults(true)
             }
           }}
           placeholder="Search by brand, model, or name..."
