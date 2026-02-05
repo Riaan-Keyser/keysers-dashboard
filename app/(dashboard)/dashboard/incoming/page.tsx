@@ -136,6 +136,16 @@ export default function IncomingGearPage() {
   const [undoingReceived, setUndoingReceived] = useState<string | null>(null)
   const [notifyingClient, setNotifyingClient] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
+  
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string
+    name: string
+    purchaseId?: string
+    type: 'purchase' | 'product'
+  } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     fetchPurchases()
@@ -280,45 +290,55 @@ export default function IncomingGearPage() {
     event.preventDefault()
     event.stopPropagation()
     
-    if (!confirm(`Are you sure you want to delete all items for ${customerName}?\n\nThis action cannot be undone.`)) {
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/incoming-gear/${purchaseId}`, {
-        method: "DELETE"
-      })
-
-      if (response.ok) {
-        fetchPurchases()
-      } else {
-        alert("Failed to delete purchase")
-      }
-    } catch (error) {
-      console.error("Failed to delete purchase:", error)
-      alert("Failed to delete purchase")
-    }
+    setDeleteTarget({
+      id: purchaseId,
+      name: customerName,
+      type: 'purchase'
+    })
+    setShowDeleteModal(true)
   }
 
   const handleDeleteIncomingItem = async (itemId: string, productName: string, purchaseId: string) => {
-    if (!confirm(`Are you sure you want to delete "${productName}"?\n\nThis action cannot be undone.`)) {
-      return
-    }
+    setDeleteTarget({
+      id: itemId,
+      name: productName,
+      purchaseId,
+      type: 'product'
+    })
+    setShowDeleteModal(true)
+  }
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+
+    setDeleting(true)
     try {
-      const response = await fetch(`/api/incoming-gear/items/${itemId}`, {
+      const url = deleteTarget.type === 'purchase' 
+        ? `/api/incoming-gear/${deleteTarget.id}`
+        : `/api/incoming-gear/items/${deleteTarget.id}`
+
+      const response = await fetch(url, {
         method: "DELETE"
       })
 
       if (response.ok) {
         fetchPurchases()
+        setShowDeleteModal(false)
+        setDeleteTarget(null)
       } else {
-        alert("Failed to delete product")
+        alert(`Failed to delete ${deleteTarget.type}`)
       }
     } catch (error) {
-      console.error("Failed to delete product:", error)
-      alert("Failed to delete product")
+      console.error(`Failed to delete ${deleteTarget.type}:`, error)
+      alert(`Failed to delete ${deleteTarget.type}`)
+    } finally {
+      setDeleting(false)
     }
+  }
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false)
+    setDeleteTarget(null)
   }
 
   const openLightbox = (images: string[], index: number) => {
@@ -969,15 +989,12 @@ export default function IncomingGearPage() {
                                       key={item.id}
                                       className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-blue-400 transition-all"
                                     >
-                                      <div className="flex items-center justify-between">
+                                      <div className="flex items-center justify-between gap-4">
                                         <div 
                                           className="flex-1 cursor-pointer"
                                           onClick={() => window.location.href = `/dashboard/inspections/${purchase.inspectionSessionId}/items/${item.id}`}
                                         >
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <h4 className="font-semibold text-gray-900">{item.clientName}</h4>
-                                            {getStatusBadge()}
-                                          </div>
+                                          <h4 className="font-semibold text-gray-900 mb-2">{item.clientName}</h4>
                                           <p className="text-sm text-gray-600">
                                             {item.verifiedItem?.locked ? (
                                               <span className="text-green-600 font-medium">
@@ -989,6 +1006,9 @@ export default function IncomingGearPage() {
                                               <span className="text-gray-500">Click to start verification</span>
                                             )}
                                           </p>
+                                        </div>
+                                        <div className="flex items-center justify-center min-w-[120px]">
+                                          {getStatusBadge()}
                                         </div>
                                         <div className="flex items-center gap-2">
                                           <button
@@ -1007,6 +1027,18 @@ export default function IncomingGearPage() {
                                     </div>
                                   )
                                 })}
+                                
+                                {/* Add Products Button */}
+                                <button
+                                  onClick={() => {
+                                    // TODO: Implement add product functionality
+                                    alert("Add product functionality coming soon!")
+                                  }}
+                                  className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 hover:bg-blue-50 transition-all text-gray-600 hover:text-blue-600 flex items-center justify-center gap-2"
+                                >
+                                  <PackagePlus className="h-5 w-5" />
+                                  <span className="font-medium">Add Products</span>
+                                </button>
                               </div>
                             )}
 
@@ -1248,6 +1280,65 @@ export default function IncomingGearPage() {
             fetchPurchases()
           }}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deleteTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              
+              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                Confirm Deletion
+              </h3>
+              
+              <p className="text-gray-600 text-center mb-6">
+                {deleteTarget.type === 'purchase' ? (
+                  <>
+                    Are you sure you want to delete all items for <strong>{deleteTarget.name}</strong>?
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to delete <strong>{deleteTarget.name}</strong>?
+                  </>
+                )}
+                <br />
+                <span className="text-red-600 font-medium">This action cannot be undone.</span>
+              </p>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={cancelDelete}
+                  variant="outline"
+                  className="flex-1"
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmDelete}
+                  disabled={deleting}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
