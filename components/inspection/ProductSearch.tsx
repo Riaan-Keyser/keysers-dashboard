@@ -81,6 +81,33 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
     onSelect(product)
   }, [onSelect])
 
+  // Sync selectedProduct with value prop (when parent sets it externally after adding new product)
+  useEffect(() => {
+    const fetchProductById = async () => {
+      if (!value) {
+        return
+      }
+      
+      // If we already have this product selected, don't refetch
+      if (selectedProduct?.id === value) {
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/products/${value}`)
+        if (response.ok) {
+          const product = await response.json()
+          setSelectedProduct(product)
+          setSearchTerm(product.name)
+        }
+      } catch (error) {
+        console.error("Failed to fetch product by ID:", error)
+      }
+    }
+    
+    fetchProductById()
+  }, [value]) // Only depends on value, intentionally excludes selectedProduct to avoid loops
+
   // Auto-search when component mounts with initialSearch (only once)
   useEffect(() => {
     if (initialSearch && initialSearch.length >= 2 && !hasInitialSearchRun.current) {
