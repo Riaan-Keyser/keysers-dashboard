@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { itemId: string } }
+  { params }: { params: Promise<{ itemId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -13,7 +13,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { itemId } = params
+    const { itemId } = await params
 
     // Check if this is an IncomingGearItem (inspection in progress)
     const incomingItem = await prisma.incomingGearItem.findUnique({
