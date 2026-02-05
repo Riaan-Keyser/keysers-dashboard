@@ -34,6 +34,9 @@ export async function GET(request: NextRequest) {
         },
         inspectionSession: {
           include: {
+            createdBy: {
+              select: { id: true, name: true }
+            },
             incomingItems: {
               include: {
                 verifiedItem: {

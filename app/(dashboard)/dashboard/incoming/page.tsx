@@ -54,6 +54,7 @@ interface PendingPurchase {
     sessionName: string
     status: string
     createdAt: string
+    createdBy: { id: string; name: string } | null
     incomingItems: {
       id: string
       clientName: string
@@ -819,22 +820,13 @@ export default function IncomingGearPage() {
                                 <Package className="h-5 w-5 text-gray-400" />
                                 <div>
                                   <p className="text-sm font-medium text-gray-700">
-                                    {purchase.gearReceivedAt ? 'Gear Received (In-person)' : 'Awaiting Gear Delivery'}
+                                    {purchase.gearReceivedAt 
+                                      ? `Gear Received (In-person) - by ${purchase.gearReceivedBy?.name || "Staff"}` 
+                                      : 'Awaiting Gear Delivery'}
                                   </p>
                                   {!purchase.gearReceivedAt && (
                                     <p className="text-xs text-gray-500">No tracking submitted - client may drop off in person</p>
                                   )}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Show received info if marked */}
-                            {purchase.gearReceivedAt && !purchase.clientNotifiedAt && (
-                              <div className="flex items-center gap-2">
-                                <CheckCircle className="h-5 w-5 text-green-600" />
-                                <div>
-                                  <p className="text-xs text-gray-500">Received by</p>
-                                  <p className="text-sm font-medium text-gray-900">{purchase.gearReceivedBy?.name || "Staff"}</p>
                                 </div>
                               </div>
                             )}
@@ -960,9 +952,17 @@ export default function IncomingGearPage() {
                                 <div>
                                   <p className="font-semibold text-gray-900">🔍 Inspection In Progress</p>
                                   <p className="text-xs text-gray-600">
-                                    Started: {new Date(purchase.inspectionSession!.createdAt).toLocaleDateString()}
+                                    {purchase.inspectionSession!.createdBy?.name 
+                                      ? `Inspecting: ${purchase.inspectionSession!.createdBy.name}` 
+                                      : 'Inspector: Staff'}
                                   </p>
                                 </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-gray-500">Started</p>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {new Date(purchase.inspectionSession!.createdAt).toLocaleDateString()}
+                                </p>
                               </div>
                             </div>
 
