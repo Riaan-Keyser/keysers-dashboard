@@ -29,33 +29,7 @@ export async function DELETE(
     })
 
     if (incomingItem) {
-      // Delete the VerifiedGearItem and all related records first if it exists
-      if (incomingItem.verifiedItem) {
-        const verifiedItemId = incomingItem.verifiedItem.id
-        
-        // Delete all related records in the correct order
-        await prisma.verifiedAnswer.deleteMany({
-          where: { verifiedGearItemId: verifiedItemId }
-        })
-        
-        await prisma.verifiedAccessory.deleteMany({
-          where: { verifiedGearItemId: verifiedItemId }
-        })
-        
-        await prisma.priceOverride.deleteMany({
-          where: { verifiedGearItemId: verifiedItemId }
-        })
-        
-        await prisma.pricingSnapshot.deleteMany({
-          where: { verifiedGearItemId: verifiedItemId }
-        })
-        
-        await prisma.verifiedGearItem.delete({
-          where: { id: verifiedItemId }
-        })
-      }
-
-      // Delete the IncomingGearItem
+      // Delete the IncomingGearItem (Prisma will cascade delete VerifiedGearItem and related records)
       await prisma.incomingGearItem.delete({
         where: { id: itemId }
       })
