@@ -1034,7 +1034,7 @@ export default function IncomingGearPage() {
                                     // TODO: Implement add product functionality
                                     alert("Add product functionality coming soon!")
                                   }}
-                                  className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 hover:bg-blue-50 transition-all text-gray-600 hover:text-blue-600 flex items-center justify-center gap-2"
+                                  className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg py-6 px-4 hover:border-blue-400 hover:bg-blue-50 transition-all text-gray-600 hover:text-blue-600 flex items-center justify-center gap-2"
                                 >
                                   <PackagePlus className="h-5 w-5" />
                                   <span className="font-medium">Add Products</span>
