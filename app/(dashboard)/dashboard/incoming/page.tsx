@@ -300,6 +300,27 @@ export default function IncomingGearPage() {
     }
   }
 
+  const handleDeleteIncomingItem = async (itemId: string, productName: string, purchaseId: string) => {
+    if (!confirm(`Are you sure you want to delete "${productName}"?\n\nThis action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/incoming-gear/items/${itemId}`, {
+        method: "DELETE"
+      })
+
+      if (response.ok) {
+        fetchPurchases()
+      } else {
+        alert("Failed to delete product")
+      }
+    } catch (error) {
+      console.error("Failed to delete product:", error)
+      alert("Failed to delete product")
+    }
+  }
+
   const openLightbox = (images: string[], index: number) => {
     setLightboxImages(images)
     setLightboxIndex(index)
@@ -682,19 +703,21 @@ export default function IncomingGearPage() {
                         </div>
                       </div>
                     </button>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
+                    <div className="flex items-center gap-6 ml-auto">
+                      <div className="text-center min-w-[80px]">
                         <p className="text-sm font-medium">{purchase.items.length} items</p>
                         {purchase.totalQuoteAmount && (
                           <p className="text-sm text-gray-500">{formatPrice(purchase.totalQuoteAmount)}</p>
                         )}
                       </div>
-                      <Badge variant={getStatusColor(purchase.status)}>
-                        {purchase.status === "APPROVED" ? "Awaiting Client" : 
-                         purchase.status === "PENDING_APPROVAL" ? "Client Accepted" :
-                         purchase.status.replace(/_/g, " ")}
-                      </Badge>
-                      <span className="text-xs text-gray-400">
+                      <div className="flex items-center justify-center min-w-[180px]">
+                        <Badge variant={getStatusColor(purchase.status)}>
+                          {purchase.status === "APPROVED" ? "Awaiting Client" : 
+                           purchase.status === "PENDING_APPROVAL" ? "Client Accepted" :
+                           purchase.status.replace(/_/g, " ")}
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-gray-400 min-w-[90px] text-center">
                         {new Date(purchase.createdAt).toLocaleDateString()}
                       </span>
                       <button
@@ -944,11 +967,13 @@ export default function IncomingGearPage() {
                                   return (
                                     <div
                                       key={item.id}
-                                      onClick={() => window.location.href = `/dashboard/inspections/${purchase.inspectionSessionId}/items/${item.id}`}
-                                      className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-blue-400 transition-all cursor-pointer"
+                                      className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-blue-400 transition-all"
                                     >
                                       <div className="flex items-center justify-between">
-                                        <div className="flex-1">
+                                        <div 
+                                          className="flex-1 cursor-pointer"
+                                          onClick={() => window.location.href = `/dashboard/inspections/${purchase.inspectionSessionId}/items/${item.id}`}
+                                        >
                                           <div className="flex items-center gap-2 mb-1">
                                             <h4 className="font-semibold text-gray-900">{item.clientName}</h4>
                                             {getStatusBadge()}
@@ -965,7 +990,19 @@ export default function IncomingGearPage() {
                                             )}
                                           </p>
                                         </div>
-                                        <ArrowRight className="h-5 w-5 text-gray-400" />
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              handleDeleteIncomingItem(item.id, item.clientName, purchase.id)
+                                            }}
+                                            className="p-1.5 hover:bg-red-50 rounded transition-colors"
+                                            title="Delete this product"
+                                          >
+                                            <Trash2 className="h-4 w-4 text-red-600 hover:text-red-700" />
+                                          </button>
+                                          <ArrowRight className="h-5 w-5 text-gray-400" />
+                                        </div>
                                       </div>
                                     </div>
                                   )
