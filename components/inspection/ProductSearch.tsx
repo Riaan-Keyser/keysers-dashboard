@@ -74,16 +74,23 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   )
 
   const handleSelect = useCallback((product: Product) => {
+    // Immediately set flag to prevent any reopening
     justSelectedRef.current = true
+    
+    // Close dropdown first
     setShowResults(false)
+    
+    // Set selected product (this prevents onFocus from reopening)
     setSelectedProduct(product)
     setSearchTerm(product.name)
+    
+    // Call parent handler
     onSelect(product)
     
-    // Reset the flag after a delay
+    // Keep flag set for longer to prevent any reopening
     setTimeout(() => {
       justSelectedRef.current = false
-    }, 500)
+    }, 1000)
   }, [onSelect])
 
   // Auto-search when component mounts with initialSearch
@@ -129,21 +136,24 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
               setSelectedProduct(null)
               setProducts([])
               setShowResults(false)
+            } else if (!selectedProduct) {
+              // Only show results when actively typing and no product selected
+              setShowResults(true)
             }
           }}
           onFocus={() => {
-            // Don't reopen dropdown if user just selected a product or if already selected
-            if (!justSelectedRef.current && !selectedProduct && products.length > 0) {
+            // Only show dropdown if typing and no product selected yet
+            if (!selectedProduct && searchTerm.length >= 2 && products.length > 0 && !justSelectedRef.current) {
               setShowResults(true)
             }
           }}
           onBlur={() => {
-            // Close dropdown when clicking outside (after a small delay to allow click to register)
+            // Close dropdown after allowing click to register
             setTimeout(() => {
               if (!justSelectedRef.current) {
                 setShowResults(false)
               }
-            }, 150)
+            }, 200)
           }}
           placeholder="Search by brand, model, or name..."
           className="pl-10"
