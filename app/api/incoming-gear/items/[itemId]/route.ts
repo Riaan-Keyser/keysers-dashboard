@@ -141,8 +141,15 @@ export async function DELETE(
     }
 
     return NextResponse.json({ error: "Item not found" }, { status: 404 })
-  } catch (error) {
-    console.error("DELETE /api/incoming-gear/items/[itemId] error:", error)
-    return NextResponse.json({ error: "Failed to delete item" }, { status: 500 })
+  } catch (error: any) {
+    console.error("DELETE /api/incoming-gear/items/[itemId] error:", {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    })
+    return NextResponse.json({ 
+      error: "Failed to delete item", 
+      details: error.message 
+    }, { status: 500 })
   }
 }

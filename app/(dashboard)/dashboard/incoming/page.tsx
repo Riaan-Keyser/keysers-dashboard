@@ -326,13 +326,18 @@ export default function IncomingGearPage() {
         setDeleteTarget(null)
         fetchPurchases()
       } else {
-        const errorData = await response.json()
-        console.error(`Failed to delete ${deleteTarget.type}:`, errorData)
+        const errorText = await response.text()
+        console.error(`Failed to delete ${deleteTarget.type}:`, {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+          url: url
+        })
         setShowDeleteModal(false)
         setDeleteTarget(null)
       }
     } catch (error) {
-      console.error(`Failed to delete ${deleteTarget.type}:`, error)
+      console.error(`Exception while deleting ${deleteTarget.type}:`, error)
       setShowDeleteModal(false)
       setDeleteTarget(null)
     } finally {
