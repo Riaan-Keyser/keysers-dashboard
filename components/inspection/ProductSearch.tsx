@@ -37,6 +37,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   const [showResults, setShowResults] = useState(false)
   const [hasAutoSelected, setHasAutoSelected] = useState(false)
   const hasInitialSearchRun = useRef(false)
+  const [hasUserInteracted, setHasUserInteracted] = useState(false)
 
   // Debounced search
   const searchProducts = useCallback(
@@ -135,9 +136,19 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
         <Input
           type="text"
           value={searchTerm}
+          onFocus={(e) => {
+            // Clear the initial search text on first focus to allow immediate typing
+            if (!hasUserInteracted && searchTerm === initialSearch && !selectedProduct) {
+              setSearchTerm("")
+              setHasUserInteracted(true)
+            }
+            // Select all text for easy replacement
+            e.target.select()
+          }}
           onChange={(e) => {
             const newValue = e.target.value
             setSearchTerm(newValue)
+            setHasUserInteracted(true)
             
             // Clear selection if user is editing
             if (selectedProduct && newValue !== selectedProduct.name) {
