@@ -1,12 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Save, Database, Globe, Users, ChevronDown, ChevronRight } from "lucide-react"
+import { Save, Database, Globe, Users, ChevronDown, ChevronRight, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { InventoryDatabaseManager } from "@/components/dashboard/inventory-database-manager"
+import Link from "next/link"
 
 export default function SettingsPage() {
   const [wooSettings, setWooSettings] = useState({
@@ -111,6 +112,26 @@ export default function SettingsPage() {
           </CardContent>
         )}
       </Card>
+
+      {/* Accessories Management */}
+      <Link href="/dashboard/settings/accessories">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow">
+          <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Package className="h-6 w-6 text-purple-600" />
+                <div>
+                  <CardTitle className="text-purple-900">Accessories Management</CardTitle>
+                  <CardDescription className="text-purple-700">
+                    Configure default accessories for each product type
+                  </CardDescription>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-purple-500" />
+            </div>
+          </CardHeader>
+        </Card>
+      </Link>
 
       {/* WooCommerce Integration */}
       <Card>
