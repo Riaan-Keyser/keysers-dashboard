@@ -354,7 +354,7 @@ export default function ItemVerificationPage() {
 
       if (!response.ok) throw new Error("Failed to approve item")
       
-      router.push(`/dashboard/inspections/${sessionId}`)
+      router.push(`/dashboard/incoming`)
     } catch (error) {
       console.error("Failed to approve item:", error)
     } finally {
@@ -377,8 +377,8 @@ export default function ItemVerificationPage() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-600">Item not found</p>
-        <Button className="mt-4" onClick={() => router.push(`/dashboard/inspections/${sessionId}`)}>
-          Back to Session
+        <Button className="mt-4" onClick={() => router.push(`/dashboard/incoming`)}>
+          Back to Incoming Gear
         </Button>
       </div>
     )
@@ -388,7 +388,7 @@ export default function ItemVerificationPage() {
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="outline" onClick={() => router.push(`/dashboard/inspections/${sessionId}`)}>
+        <Button variant="outline" onClick={() => router.push(`/dashboard/incoming`)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -938,9 +938,9 @@ export default function ItemVerificationPage() {
                 <Button
                   variant="outline"
                   className="mt-4"
-                  onClick={() => router.push(`/dashboard/inspections/${sessionId}`)}
+                  onClick={() => router.push(`/dashboard/incoming`)}
                 >
-                  Back to Session
+                  Back to Incoming Gear
                 </Button>
               </Card>
             ) : (
