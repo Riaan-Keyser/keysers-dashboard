@@ -137,15 +137,30 @@ export async function POST(
         newProductName: product.name
       })
       
+      // First, delete related records that might not exist
+      await prisma.verifiedAnswer.deleteMany({
+        where: { verifiedItemId: incomingItem.verifiedItem.id }
+      })
+      
+      await prisma.verifiedAccessory.deleteMany({
+        where: { verifiedItemId: incomingItem.verifiedItem.id }
+      })
+      
+      // Delete pricing snapshot if it exists
+      await prisma.pricingSnapshot.deleteMany({
+        where: { verifiedItemId: incomingItem.verifiedItem.id }
+      })
+      
+      // Delete price override if it exists
+      await prisma.priceOverride.deleteMany({
+        where: { verifiedItemId: incomingItem.verifiedItem.id }
+      })
+      
+      // Now update the verified item with new product
       verifiedItem = await prisma.verifiedGearItem.update({
         where: { id: incomingItem.verifiedItem.id },
         data: {
-          productId,
-          // Reset some fields when product changes
-          answers: { deleteMany: {} },
-          accessories: { deleteMany: {} },
-          pricingSnapshot: { delete: true },
-          priceOverride: { delete: true }
+          productId
         },
         include: {
           product: {
