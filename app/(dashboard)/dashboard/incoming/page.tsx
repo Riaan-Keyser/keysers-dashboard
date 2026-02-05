@@ -322,15 +322,19 @@ export default function IncomingGearPage() {
       })
 
       if (response.ok) {
-        fetchPurchases()
         setShowDeleteModal(false)
         setDeleteTarget(null)
+        fetchPurchases()
       } else {
-        alert(`Failed to delete ${deleteTarget.type}`)
+        const errorData = await response.json()
+        console.error(`Failed to delete ${deleteTarget.type}:`, errorData)
+        setShowDeleteModal(false)
+        setDeleteTarget(null)
       }
     } catch (error) {
       console.error(`Failed to delete ${deleteTarget.type}:`, error)
-      alert(`Failed to delete ${deleteTarget.type}`)
+      setShowDeleteModal(false)
+      setDeleteTarget(null)
     } finally {
       setDeleting(false)
     }

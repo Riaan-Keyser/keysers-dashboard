@@ -29,55 +29,62 @@ export async function DELETE(
     })
 
     if (incomingItem) {
-      // Delete the VerifiedGearItem first if it exists
-      if (incomingItem.verifiedItem) {
-        await prisma.verifiedGearItem.delete({
-          where: { id: incomingItem.verifiedItem.id }
-        })
-      }
-
-      // Delete the IncomingGearItem
-      await prisma.incomingGearItem.delete({
-        where: { id: itemId }
+      console.log(`Deleting IncomingGearItem: ${itemId}`, {
+        hasVerifiedItem: !!incomingItem.verifiedItem,
+        inspectionSessionId: incomingItem.inspectionSessionId
       })
 
-      // Check if this was the last item in the inspection session
-      const remainingItems = await prisma.incomingGearItem.count({
-        where: { inspectionSessionId: incomingItem.inspectionSessionId }
-      })
-
-      // If no items left, delete the inspection session and update purchase status
-      if (remainingItems === 0 && incomingItem.inspectionSession) {
-        await prisma.inspectionSession.delete({
-          where: { id: incomingItem.inspectionSessionId }
+      try {
+        // Delete the IncomingGearItem (will cascade delete VerifiedGearItem, VerifiedAnswers, VerifiedAccessories, PricingSnapshot, PriceOverride)
+        await prisma.incomingGearItem.delete({
+          where: { id: itemId }
         })
 
-        // Update purchase status back to PENDING_REVIEW
-        if (incomingItem.inspectionSession.pendingPurchase) {
-          await prisma.pendingPurchase.update({
-            where: { id: incomingItem.inspectionSession.pendingPurchase.id },
-            data: {
-              status: "PENDING_REVIEW",
-              inspectionSessionId: null
-            }
+        console.log(`Successfully deleted IncomingGearItem: ${itemId}`)
+
+        // Check if this was the last item in the inspection session
+        const remainingItems = await prisma.incomingGearItem.count({
+          where: { inspectionSessionId: incomingItem.inspectionSessionId }
+        })
+
+        console.log(`Remaining items in session: ${remainingItems}`)
+
+        // If no items left, delete the inspection session and update purchase status
+        if (remainingItems === 0 && incomingItem.inspectionSession) {
+          await prisma.inspectionSession.delete({
+            where: { id: incomingItem.inspectionSessionId }
           })
+
+          // Update purchase status back to PENDING_REVIEW
+          if (incomingItem.inspectionSession.pendingPurchase) {
+            await prisma.pendingPurchase.update({
+              where: { id: incomingItem.inspectionSession.pendingPurchase.id },
+              data: {
+                status: "PENDING_REVIEW",
+                inspectionSessionId: null
+              }
+            })
+          }
         }
+
+        // Log activity
+        await prisma.activityLog.create({
+          data: {
+            userId: session.user.id,
+            action: "DELETED_INCOMING_ITEM",
+            entityType: "INCOMING_GEAR_ITEM",
+            entityId: itemId,
+            details: JSON.stringify({
+              itemName: incomingItem.clientName
+            })
+          }
+        })
+
+        return NextResponse.json({ success: true })
+      } catch (deleteError) {
+        console.error(`Error deleting IncomingGearItem ${itemId}:`, deleteError)
+        throw deleteError
       }
-
-      // Log activity
-      await prisma.activityLog.create({
-        data: {
-          userId: session.user.id,
-          action: "DELETED_INCOMING_ITEM",
-          entityType: "INCOMING_GEAR_ITEM",
-          entityId: itemId,
-          details: JSON.stringify({
-            itemName: incomingItem.clientName
-          })
-        }
-      })
-
-      return NextResponse.json({ success: true })
     }
 
     // Check if this is a PendingItem (not yet inspected)
