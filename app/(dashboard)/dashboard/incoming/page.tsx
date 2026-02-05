@@ -891,7 +891,7 @@ export default function IncomingGearPage() {
 
                             {/* Progress */}
                             {purchase.inspectionSession && (
-                              <div className="mb-3">
+                              <div className="mb-4">
                                 {(() => {
                                   const verifiedCount = purchase.inspectionSession.incomingItems.filter(
                                     item => item.inspectionStatus === "VERIFIED"
@@ -927,27 +927,63 @@ export default function IncomingGearPage() {
                               </div>
                             )}
 
-                            {/* Action Buttons */}
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.location.href = `/dashboard/inspections/${purchase.inspectionSessionId}`}
-                                className="flex-1"
-                              >
-                                <ArrowRight className="h-4 w-4 mr-2" />
-                                Continue Inspection
-                              </Button>
+                            {/* Product Cards */}
+                            {purchase.inspectionSession && purchase.inspectionSession.incomingItems.length > 0 && (
+                              <div className="space-y-3 mb-4">
+                                {purchase.inspectionSession.incomingItems.map((item) => {
+                                  const getStatusBadge = () => {
+                                    if (item.verifiedItem?.approvedAt) {
+                                      return <Badge className="bg-green-600 text-white">APPROVED</Badge>
+                                    }
+                                    if (item.inspectionStatus === "IN_PROGRESS" || item.verifiedItem?.verifiedAt) {
+                                      return <Badge className="bg-blue-600 text-white">IN PROGRESS</Badge>
+                                    }
+                                    return <Badge className="bg-gray-500 text-white">UNVERIFIED</Badge>
+                                  }
 
-                              {purchase.inspectionSession && 
-                               purchase.inspectionSession.incomingItems.length > 0 &&
-                               purchase.inspectionSession.incomingItems.every(
-                                 item => item.inspectionStatus === "VERIFIED"
-                               ) && !purchase.finalQuoteSentAt && (
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      onClick={() => window.location.href = `/dashboard/inspections/${purchase.inspectionSessionId}/items/${item.id}`}
+                                      className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-blue-400 transition-all cursor-pointer"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <h4 className="font-semibold text-gray-900">{item.clientName}</h4>
+                                            {getStatusBadge()}
+                                          </div>
+                                          <p className="text-sm text-gray-600">
+                                            {item.verifiedItem?.locked ? (
+                                              <span className="text-green-600 font-medium">
+                                                ✓ Approved by Admin User
+                                              </span>
+                                            ) : item.inspectionStatus === "IN_PROGRESS" ? (
+                                              <span className="text-blue-600">Click to continue verification</span>
+                                            ) : (
+                                              <span className="text-gray-500">Click to start verification</span>
+                                            )}
+                                          </p>
+                                        </div>
+                                        <ArrowRight className="h-5 w-5 text-gray-400" />
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {/* Send Final Quote Button */}
+                            {purchase.inspectionSession && 
+                             purchase.inspectionSession.incomingItems.length > 0 &&
+                             purchase.inspectionSession.incomingItems.every(
+                               item => item.inspectionStatus === "VERIFIED"
+                             ) && !purchase.finalQuoteSentAt && (
+                              <div className="flex justify-end">
                                 <Button
                                   onClick={() => handleSendFinalQuote(purchase.id, purchase.customerName, purchase.customerEmail!)}
                                   disabled={sendingFinalQuote === purchase.id || !purchase.customerEmail}
-                                  className="flex-1 bg-green-600 hover:bg-green-700"
+                                  className="bg-green-600 hover:bg-green-700"
                                   size="sm"
                                 >
                                   {sendingFinalQuote === purchase.id ? (
@@ -962,8 +998,8 @@ export default function IncomingGearPage() {
                                     </>
                                   )}
                                 </Button>
-                              )}
-                            </div>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
