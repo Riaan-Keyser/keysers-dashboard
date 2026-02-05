@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { InspectionStepper } from "@/components/inspection/InspectionStepper"
 import { ProductSearch } from "@/components/inspection/ProductSearch"
+import { AddProductModal } from "@/components/products/AddProductModal"
+import { AdminApprovalModal } from "@/components/products/AdminApprovalModal"
 import { formatPrice } from "@/lib/inspection-pricing"
 import { ArrowLeft, ArrowRight, Save, Check, X, ChevronDown, ChevronUp } from "lucide-react"
 
@@ -137,6 +139,12 @@ export default function ItemVerificationPage() {
   const [overrideReason, setOverrideReason] = useState<string>("")
   const [overrideNotes, setOverrideNotes] = useState<string>("")
 
+  // Add Product Workflow
+  const [showAddProductModal, setShowAddProductModal] = useState(false)
+  const [showAdminApprovalModal, setShowAdminApprovalModal] = useState(false)
+  const [pendingProductData, setPendingProductData] = useState<any>(null)
+  const [addingProduct, setAddingProduct] = useState(false)
+
   useEffect(() => {
     fetchItem()
   }, [itemId])
@@ -203,7 +211,13 @@ export default function ItemVerificationPage() {
     }
   }
 
-  const handleProductSelect = useCallback(async (product: Product) => {
+  const handleProductSelect = useCallback(async (product: Product | any) => {
+    // Check if this is the "add new product" trigger
+    if (product.__addNewProduct) {
+      setShowAddProductModal(true)
+      return
+    }
+    
     setSelectedProduct(product)
     
     // If this product is already linked (same as existing verifiedItem), skip API call
@@ -256,6 +270,47 @@ export default function ItemVerificationPage() {
       }
     }
   }, [item?.verifiedItem?.product?.id, itemId])
+
+  const handleAddProductSubmit = (productData: any) => {
+    setPendingProductData(productData)
+    setShowAddProductModal(false)
+    setShowAdminApprovalModal(true)
+  }
+
+  const handleAdminApproval = async (adminId: string, adminPassword: string) => {
+    setAddingProduct(true)
+    try {
+      const response = await fetch("/api/products/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...pendingProductData,
+          adminId,
+          adminPassword
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to add product")
+      }
+
+      // Product added successfully! Now select it
+      setShowAdminApprovalModal(false)
+      setAddingProduct(false)
+      setPendingProductData(null)
+
+      // Select the newly added product
+      await handleProductSelect(data.product)
+      
+      alert("✅ Product added successfully to the database!")
+    } catch (error: any) {
+      setAddingProduct(false)
+      alert(error.message || "Failed to add product")
+      throw error
+    }
+  }
 
   const handleVerify = async () => {
     try {
@@ -1063,6 +1118,28 @@ export default function ItemVerificationPage() {
           </div>
         )}
       </div>
+
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={showAddProductModal}
+        onClose={() => {
+          setShowAddProductModal(false)
+          setPendingProductData(null)
+        }}
+        initialSearchTerm={item?.clientName || ""}
+        onSubmit={handleAddProductSubmit}
+      />
+
+      {/* Admin Approval Modal */}
+      <AdminApprovalModal
+        isOpen={showAdminApprovalModal}
+        onClose={() => {
+          setShowAdminApprovalModal(false)
+          setPendingProductData(null)
+        }}
+        onApprove={handleAdminApproval}
+        loading={addingProduct}
+      />
     </div>
   )
 }
