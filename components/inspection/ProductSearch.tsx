@@ -171,7 +171,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
       </div>
 
       {/* Search Results Dropdown */}
-      {showResults && searchTerm.length >= 2 && products.length > 0 && !selectedProduct && (
+      {showResults && searchTerm.length >= 2 && products.length > 0 && (
         <Card className="absolute z-50 w-full mt-2 max-h-96 overflow-y-auto shadow-lg">
           <div className="p-2 space-y-1">
             {products.map((product) => (
@@ -220,7 +220,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
       )}
 
       {/* Selected Product Display */}
-      {selectedProduct && !showResults && (
+      {selectedProduct && searchTerm === "" && (
         <Card className="mt-4 p-4">
           <div className="flex justify-between items-start">
             <div className="flex-1">

@@ -493,32 +493,32 @@ export default function ItemVerificationPage() {
       <div className="mt-8">
         {/* STEP 1: IDENTIFY PRODUCT */}
         {currentStep === 0 && (
-          <div className="relative">
-            <Card className="p-6 pb-24">
-              <h2 className="text-xl font-semibold mb-4">Identify Product</h2>
-              <p className="text-gray-600 mb-6">
-                Search for and select the canonical product that matches this item
-              </p>
+          <Card className="p-6 relative min-h-[600px] flex flex-col">
+            <h2 className="text-xl font-semibold mb-4">Identify Product</h2>
+            <p className="text-gray-600 mb-6">
+              Search for and select the canonical product that matches this item
+            </p>
 
+            <div className="flex-1">
               <ProductSearch
                 value={selectedProduct?.id}
                 onSelect={handleProductSelect}
                 onClear={() => setSelectedProduct(null)}
               />
-            </Card>
+            </div>
 
-            {/* Fixed Next Button at Bottom Right */}
-            <div className="fixed bottom-8 right-8 z-10">
+            {/* Next Button at Bottom Right of Card */}
+            <div className="absolute bottom-6 right-6">
               <Button 
                 onClick={() => setCurrentStep(1)}
                 disabled={!selectedProduct}
-                className={`${!selectedProduct ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                className={`${!selectedProduct ? 'bg-gray-400 cursor-not-allowed hover:bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
               >
                 Next: Verification
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* STEP 2: VERIFY */}
