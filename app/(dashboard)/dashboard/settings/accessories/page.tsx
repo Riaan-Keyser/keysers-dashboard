@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { AlertModal } from "@/components/ui/alert-modal"
 import { formatPrice } from "@/lib/inspection-pricing"
 import { ArrowLeft, Plus, Trash2, Save } from "lucide-react"
 import Link from "next/link"
@@ -47,6 +48,15 @@ export default function AccessoriesSettingsPage() {
     accessoryName: "",
     penaltyAmount: ""
   })
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean
+    message: string
+    type: "success" | "error" | "info" | "warning"
+  }>({
+    isOpen: false,
+    message: "",
+    type: "info"
+  })
 
   useEffect(() => {
     if (selectedProductType) {
@@ -85,13 +95,26 @@ export default function AccessoriesSettingsPage() {
       if (response.ok) {
         setNewAccessory({ accessoryName: "", penaltyAmount: "" })
         fetchAccessories()
+        setAlertModal({
+          isOpen: true,
+          message: "Accessory added successfully!",
+          type: "success"
+        })
       } else {
         const data = await response.json()
-        alert(data.error || "Failed to add accessory")
+        setAlertModal({
+          isOpen: true,
+          message: data.error || "Failed to add accessory",
+          type: "error"
+        })
       }
     } catch (error) {
       console.error("Failed to add accessory:", error)
-      alert("Failed to add accessory")
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to add accessory",
+        type: "error"
+      })
     }
   }
 
@@ -106,11 +129,19 @@ export default function AccessoriesSettingsPage() {
       if (response.ok) {
         fetchAccessories()
       } else {
-        alert("Failed to delete accessory")
+        setAlertModal({
+          isOpen: true,
+          message: "Failed to delete accessory",
+          type: "error"
+        })
       }
     } catch (error) {
       console.error("Failed to delete accessory:", error)
-      alert("Failed to delete accessory")
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to delete accessory",
+        type: "error"
+      })
     }
   }
 
@@ -248,6 +279,14 @@ export default function AccessoriesSettingsPage() {
           <li>• Staff can still add custom accessories during inspection if needed</li>
         </ul>
       </Card>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+        message={alertModal.message}
+        type={alertModal.type}
+      />
     </div>
   )
 }

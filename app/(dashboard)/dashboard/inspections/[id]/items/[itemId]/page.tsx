@@ -12,6 +12,7 @@ import { InspectionStepper } from "@/components/inspection/InspectionStepper"
 import { ProductSearch } from "@/components/inspection/ProductSearch"
 import { AddProductModal } from "@/components/products/AddProductModal"
 import { AdminApprovalModal } from "@/components/products/AdminApprovalModal"
+import { AlertModal } from "@/components/ui/alert-modal"
 import { formatPrice } from "@/lib/inspection-pricing"
 import { ArrowLeft, ArrowRight, Save, Check, X, ChevronDown, ChevronUp } from "lucide-react"
 
@@ -144,6 +145,17 @@ export default function ItemVerificationPage() {
   const [showAdminApprovalModal, setShowAdminApprovalModal] = useState(false)
   const [pendingProductData, setPendingProductData] = useState<any>(null)
   const [addingProduct, setAddingProduct] = useState(false)
+
+  // Alert Modal
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean
+    message: string
+    type: "success" | "error" | "info" | "warning"
+  }>({
+    isOpen: false,
+    message: "",
+    type: "info"
+  })
 
   useEffect(() => {
     fetchItem()
@@ -304,10 +316,19 @@ export default function ItemVerificationPage() {
       // Select the newly added product
       await handleProductSelect(data.product)
       
-      alert("✅ Product added successfully to the database!")
+      // Show success message
+      setAlertModal({
+        isOpen: true,
+        message: "Product added successfully to the database!",
+        type: "success"
+      })
     } catch (error: any) {
       setAddingProduct(false)
-      alert(error.message || "Failed to add product")
+      setAlertModal({
+        isOpen: true,
+        message: error.message || "Failed to add product",
+        type: "error"
+      })
       throw error
     }
   }
@@ -347,7 +368,11 @@ export default function ItemVerificationPage() {
       setCurrentStep(2) // Move to pricing step
     } catch (error) {
       console.error("Failed to verify item:", error)
-      alert("Failed to verify item")
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to verify item. Please try again.",
+        type: "error"
+      })
     } finally {
       setSaving(false)
     }
@@ -1139,6 +1164,14 @@ export default function ItemVerificationPage() {
         }}
         onApprove={handleAdminApproval}
         loading={addingProduct}
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+        message={alertModal.message}
+        type={alertModal.type}
       />
     </div>
   )
