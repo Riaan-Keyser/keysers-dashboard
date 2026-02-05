@@ -779,7 +779,7 @@ export default function IncomingGearPage() {
                         className="p-1 hover:bg-red-50 rounded transition-colors"
                         title="Delete this customer and all their items"
                       >
-                        <X className="h-5 w-5 text-red-600 hover:text-red-700" />
+                        <Trash2 className="h-5 w-5 text-red-600 hover:text-red-700" />
                       </button>
                     </div>
                   </div>
@@ -1010,12 +1010,12 @@ export default function IncomingGearPage() {
                                 {purchase.inspectionSession.incomingItems.map((item) => {
                                   const getStatusBadge = () => {
                                     if (item.verifiedItem?.approvedAt) {
-                                      return <Badge className="bg-green-600 text-white">APPROVED</Badge>
+                                      return <Badge className="bg-green-100 text-green-800">APPROVED</Badge>
                                     }
                                     if (item.inspectionStatus === "IN_PROGRESS" || item.verifiedItem?.verifiedAt) {
-                                      return <Badge className="bg-blue-600 text-white">IN PROGRESS</Badge>
+                                      return <Badge className="bg-blue-100 text-blue-800">IN PROGRESS</Badge>
                                     }
-                                    return <Badge className="bg-gray-500 text-white">UNVERIFIED</Badge>
+                                    return <Badge className="bg-gray-100 text-gray-800">UNVERIFIED</Badge>
                                   }
 
                                   return (
