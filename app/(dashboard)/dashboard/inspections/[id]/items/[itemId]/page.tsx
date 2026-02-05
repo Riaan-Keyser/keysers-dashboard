@@ -126,6 +126,8 @@ export default function ItemVerificationPage() {
   const [serialNumber, setSerialNumber] = useState<string>("")
   const [answers, setAnswers] = useState<Record<string, { answer: string; notes: string }>>({})
   const [accessoryStates, setAccessoryStates] = useState<Record<string, { isPresent: boolean; notes: string }>>({})
+  const [customAccessories, setCustomAccessories] = useState<string[]>([])
+  const [newAccessoryName, setNewAccessoryName] = useState<string>("")
   const [generalNotes, setGeneralNotes] = useState<string>("")
 
   // Step 3: Price
@@ -542,10 +544,11 @@ export default function ItemVerificationPage() {
             )}
 
             {/* Accessories */}
-            {accessories.length > 0 && (
+            {(accessories.length > 0 || customAccessories.length > 0) && (
               <Card className="p-6">
                 <h3 className="text-lg font-semibold mb-4">Accessories Checklist</h3>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-2 gap-4 mb-4">
+                  {/* Default accessories */}
                   {accessories.map((acc) => {
                     const isChecked = accessoryStates[acc.accessoryName]?.isPresent || false
                     return (
@@ -585,6 +588,96 @@ export default function ItemVerificationPage() {
                       </div>
                     )
                   })}
+                  
+                  {/* Custom accessories */}
+                  {customAccessories.map((accName, index) => {
+                    const isChecked = accessoryStates[accName]?.isPresent || false
+                    return (
+                      <div key={`custom-${index}`} className="p-3 space-y-2 border-l-2 border-blue-400">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => setAccessoryStates({
+                              ...accessoryStates,
+                              [accName]: {
+                                ...accessoryStates[accName],
+                                isPresent: e.target.checked
+                              }
+                            })}
+                            className="h-4 w-4"
+                          />
+                          <span className="font-medium text-sm flex-1">{accName}</span>
+                          <Badge variant="secondary" className="text-xs">Custom</Badge>
+                          <button
+                            onClick={() => {
+                              setCustomAccessories(customAccessories.filter(a => a !== accName))
+                              const newStates = { ...accessoryStates }
+                              delete newStates[accName]
+                              setAccessoryStates(newStates)
+                            }}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <Input
+                          placeholder="Notes (optional)"
+                          value={accessoryStates[accName]?.notes || ""}
+                          onChange={(e) => setAccessoryStates({
+                            ...accessoryStates,
+                            [accName]: {
+                              ...accessoryStates[accName],
+                              notes: e.target.value
+                            }
+                          })}
+                          className="text-xs h-8"
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+                
+                {/* Add custom accessory */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-2">Add Custom Accessory</h4>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Accessory name (e.g., Extra Battery)"
+                      value={newAccessoryName}
+                      onChange={(e) => setNewAccessoryName(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (newAccessoryName.trim()) {
+                            setCustomAccessories([...customAccessories, newAccessoryName.trim()])
+                            setAccessoryStates({
+                              ...accessoryStates,
+                              [newAccessoryName.trim()]: { isPresent: false, notes: "" }
+                            })
+                            setNewAccessoryName("")
+                          }
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={() => {
+                        if (newAccessoryName.trim()) {
+                          setCustomAccessories([...customAccessories, newAccessoryName.trim()])
+                          setAccessoryStates({
+                            ...accessoryStates,
+                            [newAccessoryName.trim()]: { isPresent: false, notes: "" }
+                          })
+                          setNewAccessoryName("")
+                        }
+                      }}
+                      disabled={!newAccessoryName.trim()}
+                      variant="outline"
+                    >
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </Card>
             )}
