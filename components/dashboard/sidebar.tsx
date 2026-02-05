@@ -41,11 +41,26 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [incomingGearCount, setIncomingGearCount] = useState(0)
   const [awaitingPaymentCount, setAwaitingPaymentCount] = useState(0)
+  const [repairsRequiredCount, setRepairsRequiredCount] = useState(0)
 
   useEffect(() => {
+    // Fetch incoming gear count (inspection in progress)
+    const fetchIncomingGearCount = async () => {
+      try {
+        const response = await fetch("/api/incoming-gear?status=INSPECTION_IN_PROGRESS")
+        if (response.ok) {
+          const data = await response.json()
+          setIncomingGearCount(data.length || 0)
+        }
+      } catch (error) {
+        console.error("Failed to fetch incoming gear count:", error)
+      }
+    }
+
     // Fetch awaiting payment count
-    const fetchCount = async () => {
+    const fetchAwaitingPaymentCount = async () => {
       try {
         const response = await fetch("/api/incoming-gear?status=AWAITING_PAYMENT")
         if (response.ok) {
@@ -57,10 +72,30 @@ export function Sidebar() {
       }
     }
 
-    fetchCount()
+    // Fetch repairs required count
+    const fetchRepairsRequiredCount = async () => {
+      try {
+        const response = await fetch("/api/repairs")
+        if (response.ok) {
+          const data = await response.json()
+          const count = data.itemsRequiringRepair?.length || 0
+          setRepairsRequiredCount(count)
+        }
+      } catch (error) {
+        console.error("Failed to fetch repairs required count:", error)
+      }
+    }
 
-    // Refresh count every 30 seconds
-    const interval = setInterval(fetchCount, 30000)
+    fetchIncomingGearCount()
+    fetchAwaitingPaymentCount()
+    fetchRepairsRequiredCount()
+
+    // Refresh counts every 30 seconds
+    const interval = setInterval(() => {
+      fetchIncomingGearCount()
+      fetchAwaitingPaymentCount()
+      fetchRepairsRequiredCount()
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -73,7 +108,9 @@ export function Sidebar() {
         {navItems.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon
-          const showBadge = item.href === "/dashboard/awaiting-payment" && awaitingPaymentCount > 0
+          const showIncomingGearBadge = item.href === "/dashboard/incoming" && incomingGearCount > 0
+          const showAwaitingPaymentBadge = item.href === "/dashboard/awaiting-payment" && awaitingPaymentCount > 0
+          const showRepairsBadge = item.href === "/dashboard/repairs" && repairsRequiredCount > 0
           
           return (
             <Link
@@ -87,9 +124,19 @@ export function Sidebar() {
             >
               <Icon className="h-5 w-5" />
               {item.name}
-              {showBadge && (
+              {showIncomingGearBadge && (
+                <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                  {incomingGearCount}
+                </span>
+              )}
+              {showAwaitingPaymentBadge && (
                 <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                   {awaitingPaymentCount}
+                </span>
+              )}
+              {showRepairsBadge && (
+                <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                  {repairsRequiredCount}
                 </span>
               )}
             </Link>

@@ -58,6 +58,44 @@ export async function POST(
       }
     })
 
+    // Auto-create inspection session if items exist and no session yet
+    let inspectionSessionId = purchase.inspectionSessionId as string | null
+    if (!inspectionSessionId && purchase.items.length > 0) {
+      const inspectionSession = await prisma.inspectionSession.create({
+        data: {
+          sessionName: `Quote from ${purchase.customerName} - ${new Date().toLocaleDateString()}`,
+          shipmentReference: purchase.trackingNumber || undefined,
+          vendorId: purchase.vendorId || undefined,
+          status: "IN_PROGRESS",
+          notes: `Customer Phone: ${purchase.customerPhone}\nCustomer Email: ${purchase.customerEmail || 'Not provided'}\nTracking: ${purchase.trackingNumber || 'Not provided'}`,
+          createdById: session.user.id,
+          incomingItems: {
+            create: purchase.items.map((item: any) => ({
+              clientName: item.name,
+              clientBrand: item.brand,
+              clientModel: item.model,
+              clientCondition: item.condition,
+              clientDescription: item.description,
+              clientImages: item.imageUrls || [],
+              inspectionStatus: "UNVERIFIED"
+            }))
+          }
+        },
+        include: {
+          incomingItems: true
+        }
+      })
+
+      // Link inspection session to purchase
+      await prisma.pendingPurchase.update({
+        where: { id },
+        data: { inspectionSessionId: inspectionSession.id }
+      })
+
+      inspectionSessionId = inspectionSession.id
+      console.log(`✅ Auto-created inspection session ${inspectionSession.id} with ${inspectionSession.incomingItems.length} items`)
+    }
+
     // Log activity
     await prisma.activityLog.create({
       data: {
@@ -70,7 +108,8 @@ export async function POST(
           trackingNumber: purchase.trackingNumber,
           courierCompany: purchase.courierCompany,
           itemCount: purchase.items.length,
-          receivedBy: session.user.name
+          receivedBy: session.user.name,
+          inspectionSessionId
         })
       }
     })

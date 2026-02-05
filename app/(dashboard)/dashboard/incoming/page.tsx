@@ -101,7 +101,17 @@ const formatPrice = (price: number | null): string => {
 export default function IncomingGearPage() {
   const [purchases, setPurchases] = useState<PendingPurchase[]>([])
   const [loading, setLoading] = useState(true)
-  const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(new Set())
+  const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(() => {
+    // Restore expanded state from sessionStorage
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('incomingGear_expandedPurchase')
+      if (saved) {
+        sessionStorage.removeItem('incomingGear_expandedPurchase') // Clear after reading
+        return new Set([saved])
+      }
+    }
+    return new Set()
+  })
   const [statusFilter, setStatusFilter] = useState("ALL")
   
   // Auto-refresh state
@@ -151,6 +161,13 @@ export default function IncomingGearPage() {
     message: "",
     type: "info"
   })
+
+  // Undo confirmation modal
+  const [showUndoModal, setShowUndoModal] = useState(false)
+  const [undoTarget, setUndoTarget] = useState<{
+    purchaseId: string
+    customerName: string
+  } | null>(null)
   const [inspectingPurchaseId, setInspectingPurchaseId] = useState<string | null>(null)
   
   // Undo state
@@ -234,9 +251,11 @@ export default function IncomingGearPage() {
     if (expandedPurchases.has(purchaseId)) {
       // Collapse if clicking on already expanded
       setExpandedPurchases(new Set())
+      sessionStorage.removeItem('incomingGear_expandedPurchase')
     } else {
       // Expand this one, collapse all others
       setExpandedPurchases(new Set([purchaseId]))
+      sessionStorage.setItem('incomingGear_expandedPurchase', purchaseId)
     }
   }
 
@@ -386,8 +405,8 @@ export default function IncomingGearPage() {
 
       if (response.ok) {
         const newItem = await response.json()
-        // Navigate to verify page for the new item
-        window.location.href = `/dashboard/inspections/${sessionId}/items/${newItem.id}`
+        // Navigate to verify page for the new item (with ?new=true to prevent auto-search)
+        window.location.href = `/dashboard/inspections/${sessionId}/items/${newItem.id}?new=true`
       } else {
         const data = await response.json()
         setAlertModal({
@@ -486,23 +505,16 @@ export default function IncomingGearPage() {
   }
 
   const handleMarkAsReceived = async (purchaseId: string, customerName: string) => {
-    if (!confirm(`Confirm that you have physically received the gear from ${customerName}?\n\nThis will:\n- Update status to "Inspection In Progress"\n- Client will be notified in 10 minutes\n- You can undo this action within 10 minutes`)) {
-      return
-    }
-
     try {
       const response = await fetch(`/api/incoming-gear/${purchaseId}/mark-received`, {
         method: "POST"
       })
 
       if (response.ok) {
-        setAlertModal({
-          isOpen: true,
-          message: `Gear marked as received!\n\nThe client will be notified in 10 minutes.\n\nYou can undo this action before then if needed.`,
-          type: "success"
-        })
+        // Success - just refresh the list without showing alert
         fetchPurchases()
       } else {
+        // Only show error alerts
         const data = await response.json()
         setAlertModal({
           isOpen: true,
@@ -521,10 +533,16 @@ export default function IncomingGearPage() {
   }
 
   const handleUndoReceived = async (purchaseId: string, customerName: string) => {
-    if (!confirm(`Undo "Mark as Received" for ${customerName}?\n\nThis will reset the status and the client will NOT be notified.`)) {
-      return
-    }
+    // Show confirmation modal instead of native confirm
+    setUndoTarget({ purchaseId, customerName })
+    setShowUndoModal(true)
+  }
 
+  const confirmUndoReceived = async () => {
+    if (!undoTarget) return
+
+    const { purchaseId, customerName } = undoTarget
+    setShowUndoModal(false)
     setUndoingReceived(purchaseId)
 
     try {
@@ -533,13 +551,10 @@ export default function IncomingGearPage() {
       })
 
       if (response.ok) {
-        setAlertModal({
-          isOpen: true,
-          message: `Action undone successfully!\n\nStatus reset for ${customerName}.`,
-          type: "success"
-        })
+        // Success - just refresh the list without showing alert
         fetchPurchases()
       } else {
+        // Only show error alerts
         const data = await response.json()
         setAlertModal({
           isOpen: true,
@@ -556,6 +571,7 @@ export default function IncomingGearPage() {
       })
     } finally {
       setUndoingReceived(null)
+      setUndoTarget(null)
     }
   }
 
@@ -885,7 +901,7 @@ export default function IncomingGearPage() {
                 {/* Expanded Items */}
                 {isExpanded && (
                   <div className="border-t bg-gray-50 p-3">
-                    {/* Tracking Info & Mark as Received / Undo / Client Informed */}
+                    {/* Tracking Info & Received / Undo / Client Informed */}
                     {(purchase.trackingNumber || (purchase.status === 'AWAITING_DELIVERY' || purchase.status === 'PENDING_REVIEW' || purchase.status === 'INSPECTION_IN_PROGRESS')) && (
                       <div className={`rounded-lg border p-4 mb-4 ${
                         purchase.clientNotifiedAt ? 'bg-green-50 border-green-200' :
@@ -987,7 +1003,7 @@ export default function IncomingGearPage() {
                               )
                             }
                             
-                            // State 1: Mark as Received button (initial state)
+                            // State 1: Received button (initial state)
                             if (!purchase.gearReceivedAt) {
                               return (
                                 <Button
@@ -997,13 +1013,63 @@ export default function IncomingGearPage() {
                                   className="border-green-600 text-green-600 hover:bg-green-50"
                                 >
                                   <CheckCircle className="h-4 w-4 mr-2" />
-                                  Mark as Received
+                                  Received
                                 </Button>
                               )
                             }
                             
                             return null
                           })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Products Preview (Before Received) - Same layout as inspection, but non-interactive */}
+                    {!purchase.gearReceivedAt && purchase.items && purchase.items.length > 0 && (
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4 mb-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <ClipboardCheck className="h-6 w-6 text-gray-400" />
+                            <div>
+                              <p className="font-semibold text-gray-900">Inspection Has Not Started</p>
+                              <p className="text-xs text-gray-600">
+                                Click "Received" to begin inspection
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Progress - static 0% */}
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700">
+                              Progress: 0/{purchase.items.length} items inspected
+                            </span>
+                            <span className="text-sm font-semibold text-gray-400">0%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="h-2 rounded-full bg-gray-300" style={{ width: '0%' }} />
+                          </div>
+                        </div>
+
+                        {/* Product Cards - Same layout, non-interactive */}
+                        <div className="space-y-3 mb-4">
+                          {purchase.items.map((item) => (
+                            <div
+                              key={item.id}
+                              className="bg-white border-2 border-gray-200 rounded-lg p-4"
+                            >
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-gray-900 mb-2">{item.name}</h4>
+                                  <p className="text-sm text-gray-500">Awaiting gear receipt</p>
+                                </div>
+                                <div className="flex items-center justify-center min-w-[100px]">
+                                  <Badge variant="default">UNVERIFIED</Badge>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -1122,7 +1188,10 @@ export default function IncomingGearPage() {
                                       <div className="flex items-center justify-between gap-4">
                                         <div 
                                           className="flex-1 cursor-pointer"
-                                          onClick={() => window.location.href = `/dashboard/inspections/${purchase.inspectionSessionId}/items/${item.id}`}
+                                          onClick={() => {
+                                            sessionStorage.setItem('incomingGear_expandedPurchase', purchase.id)
+                                            window.location.href = `/dashboard/inspections/${purchase.inspectionSessionId}/items/${item.id}`
+                                          }}
                                         >
                                           <h4 className="font-semibold text-gray-900 mb-2">{item.clientName}</h4>
                                           <p className="text-sm text-gray-600">
@@ -1221,54 +1290,6 @@ export default function IncomingGearPage() {
                       </div>
                     )}
 
-                    {/* Product List for Non-Inspection Statuses (AWAITING_DELIVERY, PENDING_REVIEW, etc.) */}
-                    {purchase.status !== "INSPECTION_IN_PROGRESS" && purchase.status !== "FINAL_QUOTE_SENT" && purchase.items && purchase.items.length > 0 && (
-                      <div className="space-y-3">
-                        <h4 className="font-medium text-gray-700 mb-2">Products ({purchase.items.length})</h4>
-                        {purchase.items.map((item) => (
-                          <div
-                            key={item.id}
-                            className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition-all"
-                          >
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-start gap-3">
-                                  {item.images && item.images.length > 0 && (
-                                    <img
-                                      src={item.images[0]}
-                                      alt={item.name}
-                                      className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-80"
-                                      onClick={() => openLightbox(item.images!, 0)}
-                                    />
-                                  )}
-                                  <div className="flex-1">
-                                    <h5 className="font-medium text-gray-900">{item.name}</h5>
-                                    {(item.brand || item.model) && (
-                                      <p className="text-sm text-gray-600">
-                                        {[item.brand, item.model].filter(Boolean).join(" ")}
-                                      </p>
-                                    )}
-                                    {item.description && (
-                                      <p className="text-sm text-gray-500 mt-1 line-clamp-2">{item.description}</p>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                {item.botEstimatedPrice && (
-                                  <p className="text-sm font-medium text-gray-900">
-                                    {formatPrice(item.botEstimatedPrice)}
-                                  </p>
-                                )}
-                                <Badge variant={getItemStatusColor(item.status)} className="mt-1">
-                                  {item.status.replace(/_/g, " ")}
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
               </Card>
@@ -1569,6 +1590,46 @@ export default function IncomingGearPage() {
                       OK
                     </>
                   )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Received Confirmation Modal */}
+      {showUndoModal && undoTarget && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div 
+            className="fixed inset-0 bg-black/50 transition-opacity" 
+            onClick={() => setShowUndoModal(false)}
+          />
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-10">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Undo "Mark as Received" for {undoTarget.customerName}?
+              </h3>
+              
+              <p className="text-gray-600 mb-6">
+                This will reset the status and the client will NOT be notified.
+              </p>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowUndoModal(false)
+                    setUndoTarget(null)
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmUndoReceived}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  OK
                 </Button>
               </div>
             </div>

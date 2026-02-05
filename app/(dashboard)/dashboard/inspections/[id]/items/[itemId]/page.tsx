@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -62,6 +62,9 @@ interface IncomingItem {
     locked: boolean
     approvedAt: string | null
     approvedBy: { name: string } | null
+    notInterested: boolean
+    notInterestedReason: string | null
+    requiresRepair: boolean
     answers: Array<{
       questionText: string
       answer: string
@@ -110,8 +113,10 @@ interface AccessoryTemplate {
 export default function ItemVerificationPage() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const sessionId = params.id as string
   const itemId = params.itemId as string
+  const isNewlyAdded = searchParams.get('new') === 'true'
   const { data: session } = useSession()
 
   const [currentStep, setCurrentStep] = useState(0)
@@ -139,6 +144,15 @@ export default function ItemVerificationPage() {
   const [overrideConsignPrice, setOverrideConsignPrice] = useState<string>("")
   const [overrideReason, setOverrideReason] = useState<string>("")
   const [overrideNotes, setOverrideNotes] = useState<string>("")
+  
+  // Not interested tracking
+  const [notInterested, setNotInterested] = useState(false)
+  const [notInterestedReason, setNotInterestedReason] = useState<string>("")
+  const [notInterestedReasonOther, setNotInterestedReasonOther] = useState<string>("")
+  
+  // Repair tracking
+  const [requiresRepair, setRequiresRepair] = useState(false)
+  const [repairNotes, setRepairNotes] = useState<string>("")
 
   // Add Product Workflow
   const [showAddProductModal, setShowAddProductModal] = useState(false)
@@ -212,9 +226,19 @@ export default function ItemVerificationPage() {
           setOverrideReason(override.overrideReason)
           setOverrideNotes(override.notes || "")
         }
+        
+        // Load not interested and repair flags
+        setNotInterested(data.item.verifiedItem.notInterested || false)
+        setNotInterestedReason(data.item.verifiedItem.notInterestedReason || "")
+        setNotInterestedReasonOther(data.item.verifiedItem.notInterestedReasonOther || "")
+        setRequiresRepair(data.item.verifiedItem.requiresRepair || false)
+        setRepairNotes(data.item.verifiedItem.repairNotes || "")
 
         // Always start at step 0 (Identify Product) so user can review and click "Next: Verification"
         setCurrentStep(0)
+      } else {
+        // No verifiedItem yet - pre-fill with client-provided information
+        setSerialNumber(data.item.clientSerialNumber || "")
       }
     } catch (error) {
       console.error("Failed to fetch item:", error)
@@ -256,8 +280,29 @@ export default function ItemVerificationPage() {
         return
       }
       
-      // Refresh item data to get updated clientName and all related data
-      await fetchItem()
+      // Fetch updated item data without triggering loading state or resetting step
+      const refreshResponse = await fetch(`/api/inspections/items/${itemId}`)
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json()
+        setItem(data.item)
+        
+        // Update product-specific data if verified item exists
+        if (data.item.verifiedItem) {
+          setSelectedProduct(data.item.verifiedItem.product)
+          setQuestions(data.item.verifiedItem.product.questionTemplates || [])
+          setAccessories(data.item.verifiedItem.product.accessories || [])
+          
+          // Initialize accessories from templates
+          const accessoriesMap: Record<string, { isPresent: boolean; notes: string }> = {}
+          data.item.verifiedItem.product.accessories.forEach((template: any) => {
+            accessoriesMap[template.accessoryName] = { isPresent: false, notes: "" }
+          })
+          data.item.verifiedItem.accessories.forEach((a: any) => {
+            accessoriesMap[a.accessoryName] = { isPresent: a.isPresent, notes: a.notes || "" }
+          })
+          setAccessoryStates(accessoriesMap)
+        }
+      }
     } catch (error) {
       // Silent fail - product is already selected in UI, no need to show error
       if (process.env.NODE_ENV === 'development') {
@@ -318,6 +363,26 @@ export default function ItemVerificationPage() {
 
   const handleVerify = async () => {
     try {
+      // Validate "Not interested" fields before saving
+      if (notInterested) {
+        if (!notInterestedReason) {
+          setAlertModal({
+            isOpen: true,
+            message: "Please select a reason for not being interested",
+            type: "error"
+          })
+          return
+        }
+        if (notInterestedReason === "OTHER" && !notInterestedReasonOther.trim()) {
+          setAlertModal({
+            isOpen: true,
+            message: "Please specify the reason for not being interested",
+            type: "error"
+          })
+          return
+        }
+      }
+      
       setSaving(true)
       
       const answersArray = Object.entries(answers).map(([questionText, data]) => ({
@@ -332,6 +397,7 @@ export default function ItemVerificationPage() {
         notes: data.notes
       }))
 
+      // Save verification data
       const response = await fetch(`/api/inspections/items/${itemId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -347,13 +413,32 @@ export default function ItemVerificationPage() {
 
       if (!response.ok) throw new Error("Failed to verify item")
       
+      // Save purchase decision data
+      const purchaseResponse = await fetch(`/api/inspections/items/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_purchase_decision",
+          notInterested,
+          notInterestedReason: notInterested ? notInterestedReason : null,
+          notInterestedReasonOther: notInterested && notInterestedReason === "OTHER" ? notInterestedReasonOther : null,
+          requiresRepair,
+          repairNotes: requiresRepair ? repairNotes : null
+        })
+      })
+
+      if (!purchaseResponse.ok) {
+        const error = await purchaseResponse.json()
+        throw new Error(error.error || "Failed to save purchase decision")
+      }
+      
       await fetchItem()
       setCurrentStep(2) // Move to pricing step
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to verify item:", error)
       setAlertModal({
         isOpen: true,
-        message: "Failed to verify item. Please try again.",
+        message: error.message || "Failed to verify item. Please try again.",
         type: "error"
       })
     } finally {
@@ -493,22 +578,37 @@ export default function ItemVerificationPage() {
       <div className="mt-8">
         {/* STEP 1: IDENTIFY PRODUCT */}
         {currentStep === 0 && (
-          <Card className="p-6 relative min-h-[600px] flex flex-col">
-            <h2 className="text-xl font-semibold mb-4">Identify Product</h2>
-            <p className="text-gray-600 mb-6">
-              Search for and select the canonical product that matches this item
-            </p>
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Identify Product</h2>
+              <p className="text-gray-600 mb-6">
+                Search for and select the canonical product that matches this item
+              </p>
 
-            <div className="flex-1">
-              <ProductSearch
-                value={selectedProduct?.id}
-                onSelect={handleProductSelect}
-                onClear={() => setSelectedProduct(null)}
+              <div className="h-[200px]">
+                <ProductSearch
+                  value={selectedProduct?.id}
+                  onSelect={handleProductSelect}
+                  onClear={() => setSelectedProduct(null)}
+                  initialSearch={!item?.verifiedItem && !isNewlyAdded ? (item?.clientName || "") : ""}
+                  autoSelect={!item?.verifiedItem && !isNewlyAdded}
+                />
+              </div>
+            </Card>
+
+            {/* Serial Number - Always visible in Step 1 */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Serial Number</h3>
+              <Input
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="Enter serial number"
+                className="font-mono"
               />
-            </div>
+            </Card>
 
-            {/* Next Button at Bottom Right of Card */}
-            <div className="absolute bottom-6 right-6">
+            {/* Next Button */}
+            <div className="flex justify-end">
               <Button 
                 onClick={() => setCurrentStep(1)}
                 disabled={!selectedProduct}
@@ -518,7 +618,7 @@ export default function ItemVerificationPage() {
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* STEP 2: VERIFY */}
@@ -556,15 +656,137 @@ export default function ItemVerificationPage() {
               </div>
             </Card>
 
-            {/* Serial Number */}
+            {/* Purchase Decision & Repair Status - Moved from Step 3 */}
             <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Serial Number</h3>
-              <Input
-                value={serialNumber}
-                onChange={(e) => setSerialNumber(e.target.value)}
-                placeholder="Enter serial number"
-                className="font-mono"
-              />
+              <h3 className="text-lg font-semibold mb-4">Purchase Decision & Repair Status</h3>
+              
+              <div className="space-y-4">
+                {/* Not Interested Option */}
+                <div 
+                  className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={(e) => {
+                    // Only toggle if clicking the div itself, not child inputs
+                    if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'DIV' || (e.target as HTMLElement).tagName === 'SPAN' || (e.target as HTMLElement).tagName === 'P') {
+                      setNotInterested(!notInterested)
+                      if (notInterested) {
+                        setNotInterestedReason("")
+                        setNotInterestedReasonOther("")
+                      }
+                    }
+                  }}
+                >
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={notInterested}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        setNotInterested(e.target.checked)
+                        if (!e.target.checked) {
+                          setNotInterestedReason("")
+                          setNotInterestedReasonOther("")
+                        }
+                      }}
+                      className="mt-1 h-4 w-4 pointer-events-none"
+                    />
+                    <div className="flex-1">
+                      <span className="font-medium text-gray-900">Not interested in purchasing</span>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Mark this item as declined. All prices will be set to R 0.
+                      </p>
+                    </div>
+                  </label>
+                  
+                  {notInterested && (
+                    <div className="mt-4 ml-7 space-y-3" onClick={(e) => e.stopPropagation()}>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Reason <span className="text-red-600">*</span>
+                        </label>
+                        <select
+                          value={notInterestedReason}
+                          onChange={(e) => {
+                            setNotInterestedReason(e.target.value)
+                            if (e.target.value !== "OTHER") {
+                              setNotInterestedReasonOther("")
+                            }
+                          }}
+                          className="w-full h-10 px-3 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        >
+                          <option value="">Select a reason...</option>
+                          <option value="DAMAGE">Damage</option>
+                          <option value="UNECONOMICAL_TO_REPAIR">Uneconomical to repair</option>
+                          <option value="MOLD_IN_PRODUCT">Mold in product</option>
+                          <option value="OTHER">Other</option>
+                        </select>
+                      </div>
+                      
+                      {notInterestedReason === "OTHER" && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Specify reason <span className="text-red-600">*</span>
+                          </label>
+                          <Textarea
+                            value={notInterestedReasonOther}
+                            onChange={(e) => setNotInterestedReasonOther(e.target.value)}
+                            placeholder="Enter the reason why not interested..."
+                            className="w-full min-h-[80px]"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Mark for Repair Option */}
+                <div 
+                  className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={(e) => {
+                    // Only toggle if clicking the div itself, not child inputs
+                    if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'DIV' || (e.target as HTMLElement).tagName === 'SPAN' || (e.target as HTMLElement).tagName === 'P') {
+                      setRequiresRepair(!requiresRepair)
+                      if (requiresRepair) {
+                        setRepairNotes("")
+                      }
+                    }
+                  }}
+                >
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={requiresRepair}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        setRequiresRepair(e.target.checked)
+                        if (!e.target.checked) {
+                          setRepairNotes("")
+                        }
+                      }}
+                      className="mt-1 h-4 w-4 pointer-events-none"
+                    />
+                    <div className="flex-1">
+                      <span className="font-medium text-gray-900">Mark for repair</span>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Flag this item to be sent to Repairs after payment.
+                      </p>
+                    </div>
+                  </label>
+                  
+                  {requiresRepair && (
+                    <div className="mt-3 ml-7" onClick={(e) => e.stopPropagation()}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        What's wrong and why does it need repair?
+                      </label>
+                      <Textarea
+                        value={repairNotes}
+                        onChange={(e) => setRepairNotes(e.target.value)}
+                        placeholder="Describe the issue and repair requirements..."
+                        className="w-full min-h-[80px]"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </Card>
 
             {/* Questions */}
@@ -822,22 +1044,10 @@ export default function ItemVerificationPage() {
                   </p>
                 </div>
               )}
-
-              <div className="mt-4 pt-4 border-t border-blue-300">
-                <p className="text-sm text-gray-700 mb-1">Final Auto Prices:</p>
-                <div className="flex gap-6">
-                  <p className="text-lg font-bold text-blue-900">
-                    Buy: {formatPrice(item.verifiedItem.pricingSnapshot.finalBuyPrice)}
-                  </p>
-                  <p className="text-lg font-bold text-blue-900">
-                    Consign: {formatPrice(item.verifiedItem.pricingSnapshot.finalConsignPrice)}
-                  </p>
-                </div>
-              </div>
             </Card>
 
             {/* Override Section - Admin Only */}
-            {session?.user?.role === "ADMIN" && (
+            {session?.user?.role === "ADMIN" && !notInterested && (
               <Card className="p-6">
                 <div 
                   className="flex items-center justify-between cursor-pointer hover:bg-gray-50 -m-6 p-6 rounded-t-lg transition-colors"
@@ -951,19 +1161,24 @@ export default function ItemVerificationPage() {
             )}
 
             {/* Final Prices */}
-            <Card className="p-6 bg-green-50 border-green-200">
-              <h3 className="text-lg font-semibold mb-4">💰 Final Prices</h3>
+            <Card className={`p-6 ${notInterested ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+              <h3 className="text-lg font-semibold mb-4">
+                {notInterested ? '🚫 Not Purchasing - All Prices Set to R 0' : '💰 Final Prices'}
+              </h3>
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Buy Price:</p>
                   <div className="text-2xl font-bold text-green-900 flex items-center gap-2">
                     <span>
-                      {formatPrice(
+                      {notInterested ? formatPrice(0) : formatPrice(
                         item.verifiedItem.priceOverride?.overrideBuyPrice ??
                         item.verifiedItem.pricingSnapshot.finalBuyPrice
                       )}
                     </span>
-                    {item.verifiedItem.priceOverride?.overrideBuyPrice && (
+                    {notInterested && (
+                      <Badge className="bg-red-100 text-red-800">Not Interested</Badge>
+                    )}
+                    {!notInterested && item.verifiedItem.priceOverride?.overrideBuyPrice && (
                       <Badge className="bg-yellow-100 text-yellow-800">Overridden</Badge>
                     )}
                   </div>
@@ -972,12 +1187,15 @@ export default function ItemVerificationPage() {
                   <p className="text-sm text-gray-600 mb-1">Consignment Price:</p>
                   <div className="text-2xl font-bold text-green-900 flex items-center gap-2">
                     <span>
-                      {formatPrice(
+                      {notInterested ? formatPrice(0) : formatPrice(
                         item.verifiedItem.priceOverride?.overrideConsignPrice ??
                         item.verifiedItem.pricingSnapshot.finalConsignPrice
                       )}
                     </span>
-                    {item.verifiedItem.priceOverride?.overrideConsignPrice && (
+                    {notInterested && (
+                      <Badge className="bg-red-100 text-red-800">Not Interested</Badge>
+                    )}
+                    {!notInterested && item.verifiedItem.priceOverride?.overrideConsignPrice && (
                       <Badge className="bg-yellow-100 text-yellow-800">Overridden</Badge>
                     )}
                   </div>

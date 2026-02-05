@@ -649,6 +649,15 @@ model VerifiedGearItem {
   reopenedBy   User?     @relation("ReopenedBy", fields: [reopenedById], references: [id])
   reopenReason String?
 
+  // Purchase interest tracking
+  notInterested            Boolean                @default(false)
+  notInterestedReason      NotInterestedReason?
+  notInterestedReasonOther String? // Custom reason when "Other" is selected
+  
+  // Repair tracking
+  requiresRepair Boolean @default(false)
+  repairNotes    String? // Description of what's wrong and why it needs repair
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -671,6 +680,13 @@ enum VerifiedCondition {
   VERY_GOOD // Light signs of use, fully functional
   GOOD // Moderate signs of use, fully functional
   WORN // Heavy signs of use but functional
+}
+
+enum NotInterestedReason {
+  DAMAGE // Product has damage
+  UNECONOMICAL_TO_REPAIR // Too expensive to repair
+  MOLD_IN_PRODUCT // Mold present in product
+  OTHER // Other reason (custom text)
 }
 
 // Question Template - defines questions per product type or specific product

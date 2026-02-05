@@ -15,8 +15,33 @@ export async function POST(
 
     const { id } = await params
 
+    // Get purchase with inspection session to check for items requiring repair
+    const purchase = await prisma.pendingPurchase.findUnique({
+      where: { id },
+      include: {
+        inspectionSession: {
+          include: {
+            items: {
+              include: {
+                verifiedItem: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!purchase) {
+      return NextResponse.json({ error: "Purchase not found" }, { status: 404 })
+    }
+
+    // Count items requiring repair
+    const itemsRequiringRepair = purchase.inspectionSession?.items.filter(
+      item => item.verifiedItem?.requiresRepair
+    ).length || 0
+
     // Update purchase status to PAYMENT_RECEIVED
-    const purchase = await prisma.pendingPurchase.update({
+    await prisma.pendingPurchase.update({
       where: { id },
       data: {
         status: "PAYMENT_RECEIVED"
@@ -32,16 +57,21 @@ export async function POST(
         entityId: purchase.id,
         details: JSON.stringify({
           customerName: purchase.customerName,
-          previousStatus: "AWAITING_PAYMENT"
+          previousStatus: "AWAITING_PAYMENT",
+          itemsRequiringRepair
         })
       }
     })
 
     console.log(`✅ Purchase ${id} marked as paid by ${session.user.name}`)
+    if (itemsRequiringRepair > 0) {
+      console.log(`   ⚠️  ${itemsRequiringRepair} item(s) requiring repair now available in Repairs tab`)
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Purchase marked as paid"
+      message: "Purchase marked as paid",
+      itemsRequiringRepair
     })
 
   } catch (error: any) {

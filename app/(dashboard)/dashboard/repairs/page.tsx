@@ -34,6 +34,30 @@ interface RepairLog {
   completedAt: string | null
 }
 
+interface ItemRequiringRepair {
+  id: string
+  clientName: string
+  verifiedItem: {
+    product: {
+      id: string
+      name: string
+      brand: string
+      model: string
+    }
+    serialNumber: string | null
+  }
+  session: {
+    purchase: {
+      id: string
+      customerName: string
+    }
+    vendor: {
+      id: string
+      name: string
+    }
+  }
+}
+
 const repairStatuses = [
   { value: "SENT_TO_TECH", label: "Sent to Technician" },
   { value: "IN_PROGRESS", label: "In Progress" },
@@ -44,10 +68,12 @@ const repairStatuses = [
 
 export default function RepairsPage() {
   const [repairs, setRepairs] = useState<RepairLog[]>([])
+  const [itemsRequiringRepair, setItemsRequiringRepair] = useState<ItemRequiringRepair[]>([])
   const [equipment, setEquipment] = useState<Equipment[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("ALL")
+  const [activeTab, setActiveTab] = useState<"repairs" | "requiring_repair">("repairs")
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false)
@@ -79,9 +105,22 @@ export default function RepairsPage() {
     try {
       const response = await fetch("/api/repairs")
       const data = await response.json()
-      setRepairs(data)
+      
+      // Handle new API response format (object with repairs and itemsRequiringRepair)
+      // or old format (array of repairs)
+      if (Array.isArray(data)) {
+        // Old format: array of repairs
+        setRepairs(data)
+        setItemsRequiringRepair([])
+      } else {
+        // New format: object with repairs and itemsRequiringRepair
+        setRepairs(data.repairs || [])
+        setItemsRequiringRepair(data.itemsRequiringRepair || [])
+      }
     } catch (error) {
       console.error("Failed to fetch repairs:", error)
+      setRepairs([])
+      setItemsRequiringRepair([])
     } finally {
       setLoading(false)
     }
@@ -237,11 +276,9 @@ export default function RepairsPage() {
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-gray-500">Completed This Month</p>
-          <p className="text-2xl font-bold text-green-600">
-            {repairs.filter(r => r.status === "COMPLETED" && 
-              new Date(r.completedAt || "").getMonth() === new Date().getMonth()
-            ).length}
+          <p className="text-sm text-gray-500">Requiring Repair (Paid)</p>
+          <p className="text-2xl font-bold text-red-600">
+            {itemsRequiringRepair.length}
           </p>
         </Card>
         <Card className="p-4">
@@ -252,31 +289,63 @@ export default function RepairsPage() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card className="p-4">
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search by equipment or technician..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="ALL">All Status</option>
-            {repairStatuses.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </Select>
-        </div>
-      </Card>
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab("repairs")}
+          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+            activeTab === "repairs"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Active Repairs ({repairs.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("requiring_repair")}
+          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors relative ${
+            activeTab === "requiring_repair"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Requiring Repair ({itemsRequiringRepair.length})
+          {itemsRequiringRepair.length > 0 && (
+            <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+              {itemsRequiringRepair.length}
+            </span>
+          )}
+        </button>
+      </div>
 
-      {/* Table */}
-      <Card>
+      {/* Filters - Only for Active Repairs */}
+      {activeTab === "repairs" && (
+        <Card className="p-4">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search by equipment or technician..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="ALL">All Status</option>
+              {repairStatuses.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </Select>
+          </div>
+        </Card>
+      )}
+
+      {/* Active Repairs Table */}
+      {activeTab === "repairs" && (
+        <Card>
         <Table>
           <TableHeader>
             <TableRow>
@@ -344,6 +413,60 @@ export default function RepairsPage() {
           </TableBody>
         </Table>
       </Card>
+      )}
+
+      {/* Items Requiring Repair Table */}
+      {activeTab === "requiring_repair" && (
+        <Card>
+          {itemsRequiringRepair.length === 0 ? (
+            <div className="p-12 text-center text-gray-500">
+              <Wrench className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-lg font-medium">No items requiring repair</p>
+              <p className="text-sm mt-2">Items marked for repair during inspection will appear here after payment is completed.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Serial Number</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Vendor/Client</TableHead>
+                  <TableHead>Purchase ID</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {itemsRequiringRepair.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{item.verifiedItem.product.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {item.verifiedItem.product.brand} {item.verifiedItem.product.model}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {item.verifiedItem.serialNumber || "-"}
+                    </TableCell>
+                    <TableCell>{item.session.purchase.customerName}</TableCell>
+                    <TableCell>{item.session.vendor.name}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {item.session.purchase.id.slice(0, 8)}...
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge className="bg-red-100 text-red-800">
+                        Awaiting Repair Setup
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      )}
 
       {/* Send to Repair Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Send Equipment to Repair" size="lg">

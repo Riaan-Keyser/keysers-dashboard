@@ -30,6 +30,9 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - Estimated vs actual cost tracking
 - Complete repair history
 - Integration with inventory status
+- **Auto-repair workflow** - Items flagged during inspection appear after payment
+- **Repairs badge** - Red notification for items requiring repair
+- Dual tab view: Active Repairs and Requiring Repair
 
 ✅ **Pricing & WooCommerce Sync**
 - Centralized price management
@@ -58,7 +61,10 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 ✅ **Quote Confirmation & Client Workflow**
 - Bot-generated preliminary quotes via Kapso integration
 - Shipping instructions and tracking management
-- Client gear receiving with 10-minute undo grace period
+- Client gear receiving with one-click "Received" button
+- 10-minute undo grace period with centered confirmation modal
+- Auto-inspection session creation on gear receipt
+- Product preview before gear is received (for search/reference)
 - Final quote generation and client approval flow
 - **Product selection page** - Client chooses Buy vs Consignment per item
 - **5-step details form** - Personal info, address, banking, document upload, terms
@@ -70,7 +76,7 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - **Invoice generation** - Complete payment invoice with client banking details
 
 ✅ **Gear Verification & Inspection System**
-- Product identification with auto-search and selection
+- Product identification with auto-search and auto-selection
 - Condition assessment with multipliers (Like New, Excellent, Very Good, Good, Worn)
 - Serial number tracking
 - Product-specific accessories checklist (Lenses, Camera Bodies, Tripods)
@@ -79,6 +85,9 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - Type-specific verification questions
 - General notes and observations logging
 - Auto-computed pricing based on condition and accessories
+- **"Not interested in purchasing"** option with reasons (Damage, Uneconomical, Mold)
+- Automatic price zeroing for declined items
+- **"Mark for repair"** flag for items requiring repairs after payment
 - Admin-only price override with mandatory reason tracking
 - Audit trail for all verification steps
 
@@ -98,8 +107,9 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - **Stats dashboard** - Buy items count, Consignment items count, Total Payable Value
 - **PDF generation** - Purchase Agreement, Consignment Agreement, and Payment Invoice
 - **Email notifications** - Auto-notify admin@keysers.co.za when payment pending
-- **Sidebar badges** - Red notification badge on Awaiting Payment with count
-- **Mark as Paid** - Move purchases to Payment Completed (never back to Incoming Gear)
+- **Sidebar badges** - Red notification badges on Incoming Gear, Awaiting Payment, and Repairs
+- **Mark as Paid** - Move purchases to Payment Completed (triggers repair workflow if flagged)
+- **Auto-repair workflow** - Items marked for repair appear in Repairs tab after payment
 
 ## Tech Stack
 
@@ -203,25 +213,27 @@ After seeding, you can login with:
    ↓
 7. Inspection Session Created
    ↓
-8. Staff Inspects Each Item:
-   - Product identification (auto-search & select)
+7. Staff Inspects Each Item:
+   - Product identification (auto-search & auto-select)
    - Condition selection (Like New → Worn)
    - Accessories checklist (product-type specific)
    - Serial number capture
    - Notes and observations
    - Auto-computed pricing (buy & consignment)
+   - **Purchase decision**: Mark as "Not interested" OR continue
+   - **Repair flag**: Mark for repair (if needed after purchase)
    - Admin price override (optional with reason)
    ↓
-9. Staff Clicks "Confirm - Send Final Quote to Client"
+8. Staff Clicks "Confirm - Send Final Quote to Client"
    ↓
-10. Final Quote Email Sent with Secure Link
+9. Final Quote Email Sent with Secure Link
    ↓
-11. Client Opens Link → Product Selection Page
+10. Client Opens Link → Product Selection Page
     - Reviews each inspected item with full details
     - Selects "Buy" or "Consignment" for EACH item
     - Sees side-by-side pricing comparison
    ↓
-12. Client Redirected to 5-Step Details Form:
+11. Client Redirected to 5-Step Details Form:
     Step 1: Personal Information (Name, ID/Passport, Email, Phone, DOB)
     Step 2: Address (Physical & Postal addresses)
     Step 3: Banking Details (Bank, Account, Branch Code - REQUIRED)
@@ -232,28 +244,28 @@ After seeding, you can login with:
        - ECTA electronic signature notice
        - POPIA data protection notice
    ↓
-13. Client Clicks "Submit & Confirm"
+12. Client Clicks "Submit & Confirm"
     - Client selections saved (Buy/Consignment per item)
     - Client details saved to database
     - Terms acceptance logged with timestamp
     - Status: FINAL_QUOTE_SENT → AWAITING_PAYMENT
     - Token invalidated (one-time use)
    ↓
-14. Client Sees Thank You Page
+13. Client Sees Thank You Page
     - "Keysers has received your paperwork!"
     - Timeline of next steps
    ↓
-15. Admin Auto-Notified via Email (admin@keysers.co.za)
+14. Admin Auto-Notified via Email (admin@keysers.co.za)
     - Payment Awaiting notification
     - Customer details, total amount, purchase ID
     - Link to dashboard
    ↓
-16. Dashboard Updates Automatically:
+15. Dashboard Updates Automatically:
     - Purchase removed from "Incoming Gear"
     - Purchase appears in "Awaiting Payment" tab
     - Red badge "1" appears on sidebar
    ↓
-17. Staff Reviews Awaiting Payment:
+16. Staff Reviews Awaiting Payment:
     - Sees instant payment total (BUY items only)
     - Views all client details (personal, address, banking)
     - Sees item selections (Buy vs Consignment badges)
@@ -262,21 +274,24 @@ After seeding, you can login with:
       * Consignment Agreement (for Consignment items)
     - Downloads Payment Invoice (complete record)
    ↓
-18. Staff Clicks "Mark as Paid"
+17. Staff Clicks "Mark as Paid"
     - Status: AWAITING_PAYMENT → PAYMENT_RECEIVED
     - Purchase moves to "Payment Completed" tab
+    - **Items marked for repair** automatically appear in Repairs tab
+    - **Repairs badge** updates with count
     - Activity logged for audit trail
-    - Badge count updates
+    - Badge counts update
    ↓
-19. Equipment Ready to Enter Inventory
+18. Equipment Ready to Enter Inventory
     - Buy items: Paid and ready for sale
     - Consignment items: Tracked for payment on sale
+    - **Repair items**: Visible in Repairs tab for technician assignment
 ```
 
 ### Inspection Workflow
 
 ```
-Incoming Gear → Start Inspection → Inspection Session Created
+Incoming Gear → Click "Received" → Auto-creates Inspection Session
    ↓
 For Each Item:
    Step 1: Identify Product (auto-search, auto-select if match found)
@@ -285,8 +300,13 @@ For Each Item:
       - Serial number
       - Accessories checklist (product-type specific)
       - Notes
-   Step 3: Review Pricing
+   Step 3: Review Pricing & Purchase Decision
       - Auto-computed prices
+      - Mark as "Not interested" (zeros all prices)
+         • Damage
+         • Uneconomical to repair
+         • Mold in product
+      - Mark for repair (moves to Repairs after payment)
       - Admin-only override with reason
    Step 4: Approve Item (locks record)
    ↓
@@ -304,7 +324,10 @@ All Items Inspected → Send Final Quote
 - **PendingPurchase** - Client quote workflow tracking
 - **InspectionSession** - Inspection session per shipment
 - **IncomingGearItem** - Items under inspection
-- **VerifiedGearItem** - Verified product data
+- **VerifiedGearItem** - Verified product data with purchase decision flags
+  - `notInterested` (Boolean) - Flag for declined items
+  - `notInterestedReason` (Enum) - Reason: DAMAGE, UNECONOMICAL_TO_REPAIR, MOLD_IN_PRODUCT
+  - `requiresRepair` (Boolean) - Flag for items requiring post-purchase repair
 - **AccessoryTemplate** - Product-type-specific accessory lists
 - **VerifiedAccessory** - Actual accessories present
 - **RepairLog** - Repair tracking records
@@ -324,9 +347,11 @@ PENDING_INSPECTION → INSPECTED → READY_FOR_SALE → SOLD
 ### Purchase Status Flow
 
 ```
-PENDING_REVIEW → AWAITING_DELIVERY → INSPECTION_IN_PROGRESS
+PENDING_REVIEW → AWAITING_DELIVERY → INSPECTION_IN_PROGRESS (auto-created)
    ↓
 FINAL_QUOTE_SENT → (Client submits details) → AWAITING_PAYMENT
+   ↓
+PAYMENT_RECEIVED → Items marked for repair → Repairs Tab
    ↓
 PAYMENT_RECEIVED → COMPLETED → Equipment enters inventory
 ```
@@ -381,7 +406,7 @@ PAYMENT_RECEIVED → COMPLETED → Equipment enters inventory
 - `POST /api/vendors` - Create new vendor
 
 ### Repairs
-- `GET /api/repairs` - List all repairs
+- `GET /api/repairs` - List all repairs (includes items requiring repair from paid purchases)
 - `POST /api/repairs` - Create repair log
 
 ### Dashboard
@@ -389,14 +414,15 @@ PAYMENT_RECEIVED → COMPLETED → Equipment enters inventory
 
 ### Incoming Gear
 - `GET /api/incoming-gear` - List all pending purchases with auto-refresh
-- `POST /api/incoming-gear/[id]/mark-received` - Mark gear as received (with undo grace period)
+- `POST /api/incoming-gear/[id]/mark-received` - Mark gear as received (auto-creates inspection session)
 - `POST /api/incoming-gear/[id]/undo-received` - Undo mark as received (within 10 minutes)
 - `POST /api/incoming-gear/[id]/notify-client` - Send gear received email after grace period
-- `POST /api/incoming-gear/[id]/start-inspection` - Create inspection session
+- `POST /api/incoming-gear/[id]/start-inspection` - Create inspection session (now auto-created on received)
 - `POST /api/incoming-gear/[id]/send-final-quote` - Send final quote to client
-- `POST /api/incoming-gear/[id]/mark-paid` - Mark purchase as paid (moves to Payment Completed)
+- `POST /api/incoming-gear/[id]/mark-paid` - Mark purchase as paid (triggers repair workflow if flagged)
 - `GET /api/incoming-gear/pending-items/[id]` - Get item inspection details
 - `PUT /api/incoming-gear/pending-items/[id]/inspection` - Update item inspection data
+- `PATCH /api/inspections/items/[itemId]` - Update purchase decision (not interested, mark for repair)
 
 ### Quote Confirmation (Public)
 - `GET /api/quote-confirmation/[token]` - Get quote details
@@ -510,7 +536,11 @@ keysers-dashboard/
 - [x] PDF generation (Purchase Agreement, Consignment Agreement, Invoice)
 - [x] Smart payment calculations (instant payment vs consignment)
 - [x] Email notifications for pending payments
-- [x] Sidebar notification badges
+- [x] Sidebar notification badges (Incoming Gear, Awaiting Payment, Repairs)
+- [x] "Not interested in purchasing" workflow with price zeroing
+- [x] "Mark for repair" workflow with post-payment repair tracking
+- [x] Auto-inspection session creation on gear receipt
+- [x] Product visibility before gear receipt (for search/reference)
 
 ### Planned
 - [ ] Advanced analytics and reporting
@@ -530,6 +560,10 @@ keysers-dashboard/
 ## Documentation
 
 Detailed implementation documentation is available in the following files:
+
+### Latest Enhancements
+- **INSPECTION_WORKFLOW_ENHANCEMENTS_SUMMARY.md** - "Not interested" and "Mark for repair" features
+- **INSPECTION_WORKFLOW_ENHANCEMENTS_TESTING.md** - Testing guide for new inspection features
 
 ### Project Status & Planning
 - **PROJECT_STATUS.md** - Overall project status and roadmap

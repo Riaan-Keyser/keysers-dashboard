@@ -280,7 +280,12 @@ export async function PATCH(
       generalNotes,
       answers,
       accessories,
-      action // "verify", "approve", "reopen", "reject"
+      notInterested,
+      notInterestedReason,
+      notInterestedReasonOther,
+      requiresRepair,
+      repairNotes,
+      action // "verify", "approve", "reopen", "reject", "update_purchase_decision"
     } = body
 
     // Get incoming item
@@ -539,6 +544,105 @@ export async function PATCH(
       })
 
       return NextResponse.json({ success: true, message: "Item rejected" }, { status: 200 })
+    }
+
+    if (action === "update_purchase_decision") {
+      // Validate that if notInterested is true, a reason must be provided
+      if (notInterested && !notInterestedReason) {
+        return NextResponse.json({ error: "Reason required when marking as not interested" }, { status: 400 })
+      }
+      
+      // Validate that if reason is OTHER, custom reason text must be provided
+      if (notInterested && notInterestedReason === "OTHER" && !notInterestedReasonOther?.trim()) {
+        return NextResponse.json({ error: "Please specify the reason when selecting 'Other'" }, { status: 400 })
+      }
+
+      // Update the verified item with purchase decision
+      await prisma.verifiedGearItem.update({
+        where: { id: verifiedItem.id },
+        data: {
+          notInterested: notInterested || false,
+          notInterestedReason: notInterested ? notInterestedReason : null,
+          notInterestedReasonOther: notInterested && notInterestedReason === "OTHER" ? notInterestedReasonOther : null,
+          requiresRepair: requiresRepair || false,
+          repairNotes: requiresRepair ? repairNotes : null
+        }
+      })
+
+      // If marking as not interested, also update pricing snapshot to zero
+      if (notInterested && verifiedItem.pricingSnapshot) {
+        await prisma.pricingSnapshot.update({
+          where: { verifiedItemId: verifiedItem.id },
+          data: {
+            finalBuyPrice: 0,
+            finalConsignPrice: 0
+          }
+        })
+      } else if (!notInterested && verifiedItem.pricingSnapshot) {
+        // If unmarking not interested, recalculate pricing
+        const product = verifiedItem.product
+
+        // Get accessories with penalties
+        const accessoriesWithPenalties = await prisma.verifiedAccessory.findMany({
+          where: { verifiedItemId: verifiedItem.id },
+          select: {
+            accessoryName: true,
+            isPresent: true
+          }
+        })
+
+        // Get penalty amounts from templates
+        const accessoryTemplates = await prisma.accessoryTemplate.findMany({
+          where: { productId: product.id }
+        })
+
+        const accessoriesForPenalty = accessoriesWithPenalties.map(acc => {
+          const template = accessoryTemplates.find(t => t.accessoryName === acc.accessoryName)
+          return {
+            accessoryName: acc.accessoryName,
+            isPresent: acc.isPresent,
+            penaltyAmount: template?.penaltyAmount ? Number(template.penaltyAmount) : 0
+          }
+        })
+
+        const accessoryPenalty = calculateAccessoryPenalty(accessoriesForPenalty)
+
+        const pricing = computePricing({
+          baseBuyMin: Number(product.buyPriceMin),
+          baseBuyMax: Number(product.buyPriceMax),
+          baseConsignMin: Number(product.consignPriceMin),
+          baseConsignMax: Number(product.consignPriceMax),
+          condition: verifiedItem.verifiedCondition,
+          accessoryPenalty
+        })
+
+        await prisma.pricingSnapshot.update({
+          where: { verifiedItemId: verifiedItem.id },
+          data: {
+            finalBuyPrice: pricing.finalBuyPrice,
+            finalConsignPrice: pricing.finalConsignPrice
+          }
+        })
+      }
+
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId: session.user.id,
+          action: "UPDATED_PURCHASE_DECISION",
+          entityType: "VERIFIED_GEAR_ITEM",
+          entityId: verifiedItem.id,
+          details: JSON.stringify({
+            notInterested,
+            notInterestedReason,
+            notInterestedReasonOther: notInterestedReason === "OTHER" ? notInterestedReasonOther : null,
+            requiresRepair,
+            repairNotes: requiresRepair ? repairNotes : null
+          })
+        }
+      })
+
+      return NextResponse.json({ success: true, message: "Purchase decision updated" }, { status: 200 })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })

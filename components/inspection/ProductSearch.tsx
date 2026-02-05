@@ -39,6 +39,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
   const [hasAutoSelected, setHasAutoSelected] = useState(false)
   const hasInitialSearchRun = useRef(false)
   const [hasUserInteracted, setHasUserInteracted] = useState(false)
+  const [showNoResults, setShowNoResults] = useState(false)
 
   // Debounced search
   const searchProducts = useCallback(
@@ -49,21 +50,30 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
       }
 
       setLoading(true)
+      
       try {
         const response = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=20`)
         const data = await response.json()
         const fetchedProducts = data.products || []
         setProducts(fetchedProducts)
         
+        // Update no results flag based on results only
+        if (fetchedProducts.length === 0) {
+          setShowNoResults(true)
+          setShowResults(false)
+        } else {
+          setShowNoResults(false)
+        }
+        
         // If autoSelect is enabled and we have results, select first one immediately
         if (shouldAutoSelect && fetchedProducts.length > 0 && !hasAutoSelected) {
           const firstProduct = fetchedProducts[0]
           setSelectedProduct(firstProduct)
-          setSearchTerm(firstProduct.name)
+          setSearchTerm("") // Clear search to show selected product card
           setShowResults(false)
           setHasAutoSelected(true)
           onSelect(firstProduct)
-        } else {
+        } else if (fetchedProducts.length > 0) {
           setShowResults(true)
         }
       } catch (error) {
@@ -75,10 +85,20 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
     [hasAutoSelected, onSelect]
   )
 
+  // Run initial search on mount if initialSearch is provided
+  useEffect(() => {
+    if (initialSearch && initialSearch.length >= 2 && !hasInitialSearchRun.current && !value) {
+      hasInitialSearchRun.current = true
+      setSearchTerm(initialSearch)
+      searchProducts(initialSearch, autoSelect)
+    }
+  }, [initialSearch, autoSelect, value, searchProducts])
+
   const handleSelect = useCallback((product: Product) => {
     setSelectedProduct(product)
-    setSearchTerm(product.name)
+    setSearchTerm("") // Clear search to show selected product card
     setShowResults(false)
+    setShowNoResults(false)
     setProducts([]) // Clear products to prevent dropdown from showing
     onSelect(product)
   }, [onSelect])
@@ -93,6 +113,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
           setSearchTerm("")
           setProducts([])
           setShowResults(false)
+          setShowNoResults(false)
         }
         return
       }
@@ -110,6 +131,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
           setSearchTerm("")  // Clear search term to prevent dropdown
           setProducts([])     // Clear any search results
           setShowResults(false) // Hide dropdown
+          setShowNoResults(false) // Hide no results message
         }
       } catch (error) {
         console.error("Failed to fetch product by ID:", error)
@@ -129,6 +151,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
         // Clear products when search is empty
         setProducts([])
         setShowResults(false)
+        setShowNoResults(false)
       }
     }, 300)
 
@@ -158,11 +181,16 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
             setSearchTerm(newValue)
             setHasUserInteracted(true)
             
+            // Clear selected product when user starts typing
+            if (selectedProduct) {
+              setSelectedProduct(null)
+            }
+            
             // If search is cleared, reset everything
             if (!newValue) {
-              setSelectedProduct(null)
               setProducts([])
               setShowResults(false)
+              setShowNoResults(false)
             }
           }}
           placeholder="Search by brand, model, or name..."
@@ -246,39 +274,16 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
             </div>
             <div className="flex items-start gap-2 ml-4">
               <Badge>{selectedProduct.productType.replace(/_/g, " ")}</Badge>
-              <button
-                onClick={() => {
-                  setSelectedProduct(null)
-                  setSearchTerm("")
-                  setProducts([])
-                  if (onClear) {
-                    onClear()
-                  }
-                }}
-                className="p-1 hover:bg-red-50 rounded transition-colors"
-                title="Clear selected product"
-              >
-                <X className="h-4 w-4 text-red-600 hover:text-red-700" />
-              </button>
             </div>
           </div>
         </Card>
       )}
 
-      {/* Loading state */}
-      {loading && (
-        <div className="absolute top-full left-0 right-0 mt-2">
-          <Card className="p-4 text-center text-sm text-gray-600">
-            Searching...
-          </Card>
-        </div>
-      )}
-
       {/* No results */}
-      {searchTerm.length >= 2 && !loading && products.length === 0 && !selectedProduct && (
-        <Card className="p-6 text-center mt-4">
-          <p className="text-gray-600 mb-4">No products found. Try a different search term.</p>
-          <p className="text-sm text-gray-500 mb-4">Can't find the product? Add it to the database.</p>
+      {showNoResults && searchTerm.length >= 2 && !selectedProduct && (
+        <Card className="pt-6 px-6 pb-6 text-center mt-4">
+          <p className="text-sm text-gray-600 mb-2">No products found. Try a different search term.</p>
+          <p className="text-xs text-gray-500 mb-3">Can't find the product? Add it to the database.</p>
           <Button
             onClick={() => {
               // Trigger add new product - will be handled by parent
@@ -288,6 +293,7 @@ export function ProductSearch({ value, onSelect, onClear, initialSearch = "", au
               }
             }}
             variant="outline"
+            size="sm"
             className="border-blue-600 text-blue-600 hover:bg-blue-50"
           >
             <Plus className="h-4 w-4 mr-2" />

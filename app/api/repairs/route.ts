@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Get regular repair logs
     const repairs = await prisma.repairLog.findMany({
       include: {
         equipment: {
@@ -28,7 +29,54 @@ export async function GET(request: NextRequest) {
       orderBy: { sentAt: "desc" }
     })
 
-    return NextResponse.json(repairs)
+    // Get items requiring repair from paid purchases
+    const itemsRequiringRepair = await prisma.incomingGearItem.findMany({
+      where: {
+        verifiedItem: {
+          requiresRepair: true
+        },
+        session: {
+          purchase: {
+            status: "PAYMENT_RECEIVED"
+          }
+        }
+      },
+      include: {
+        verifiedItem: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                brand: true,
+                model: true
+              }
+            }
+          }
+        },
+        session: {
+          include: {
+            purchase: {
+              select: {
+                id: true,
+                customerName: true
+              }
+            },
+            vendor: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    return NextResponse.json({
+      repairs,
+      itemsRequiringRepair
+    })
   } catch (error) {
     console.error("GET /api/repairs error:", error)
     return NextResponse.json({ error: "Failed to fetch repairs" }, { status: 500 })
