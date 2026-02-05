@@ -77,18 +77,24 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 
 ✅ **Gear Verification & Inspection System**
 - Product identification with auto-search and auto-selection
+- **Add additional products** - Modal to add unexpected items to existing inspections
 - Condition assessment with multipliers (Like New, Excellent, Very Good, Good, Worn)
-- Serial number tracking
+- **Serial number moved to Step 1** - Captured earlier in workflow
 - Product-specific accessories checklist (Lenses, Camera Bodies, Tripods)
 - Smart penalty system for missing accessories
 - Dynamic badge visibility (only shows when unchecked)
 - Type-specific verification questions
 - General notes and observations logging
 - Auto-computed pricing based on condition and accessories
-- **"Not interested in purchasing"** option with reasons (Damage, Uneconomical, Mold)
-- Automatic price zeroing for declined items
-- **"Mark for repair"** flag for items requiring repairs after payment
+- **"Not interested in purchasing"** option with reasons (Damage, Uneconomical, Mold, Other)
+- Automatic price zeroing and input disabling for declined items
+- **"Mark for repair"** flag with repair notes for items requiring post-purchase repair
+- **Purchase Decision moved to Step 2** - After condition assessment, before pricing
 - Admin-only price override with mandatory reason tracking
+- **Fixed-height containers** - Prevents layout shifts during product selection
+- **Expanded client state persistence** - Returns to same client when navigating back
+- **Smart search behavior** - Empty for new items, auto-populated for quote items
+- **Smooth search experience** - No flashing or visual glitches during searches
 - Audit trail for all verification steps
 
 ✅ **Accessories Management**
@@ -294,21 +300,33 @@ After seeding, you can login with:
 Incoming Gear → Click "Received" → Auto-creates Inspection Session
    ↓
 For Each Item:
-   Step 1: Identify Product (auto-search, auto-select if match found)
+   Step 1: Identify Product
+      - Search and select product (auto-populated for quote items, empty for new items)
+      - Serial number capture (moved to Step 1 for early capture)
+      - Fixed-height layout prevents shifting
+   
    Step 2: Verify & Condition
       - Select condition (Like New, Excellent, Very Good, Good, Worn)
-      - Serial number
-      - Accessories checklist (product-type specific)
-      - Notes
-   Step 3: Review Pricing & Purchase Decision
-      - Auto-computed prices
-      - Mark as "Not interested" (zeros all prices)
-         • Damage
-         • Uneconomical to repair
-         • Mold in product
-      - Mark for repair (moves to Repairs after payment)
-      - Admin-only override with reason
+      - Accessories checklist (product-type specific with penalties)
+      - Type-specific verification questions
+      - General notes and observations
+      - **Purchase Decision** (moved to Step 2):
+         • Mark as "Not interested" with reason (Damage, Uneconomical, Mold, Other)
+           - Automatically zeros all pricing fields
+           - Disables price inputs
+         • Mark for repair with repair notes
+           - Item moves to Repairs tab after payment
+   
+   Step 3: Review Pricing
+      - Auto-computed prices based on condition and accessories
+      - Admin-only price override with mandatory reason
+   
    Step 4: Approve Item (locks record)
+   ↓
+Add Additional Items (Optional):
+   - Click "Add Products" button
+   - Fill in client-provided details via modal
+   - Item added to inspection with empty search bar
    ↓
 All Items Inspected → Send Final Quote
 ```
@@ -326,8 +344,10 @@ All Items Inspected → Send Final Quote
 - **IncomingGearItem** - Items under inspection
 - **VerifiedGearItem** - Verified product data with purchase decision flags
   - `notInterested` (Boolean) - Flag for declined items
-  - `notInterestedReason` (Enum) - Reason: DAMAGE, UNECONOMICAL_TO_REPAIR, MOLD_IN_PRODUCT
+  - `notInterestedReason` (Enum) - Reason: DAMAGE, UNECONOMICAL_TO_REPAIR, MOLD_IN_PRODUCT, OTHER
+  - `notInterestedReasonOther` (String) - Custom reason when OTHER selected
   - `requiresRepair` (Boolean) - Flag for items requiring post-purchase repair
+  - `repairNotes` (String) - Description of repair requirements
 - **AccessoryTemplate** - Product-type-specific accessory lists
 - **VerifiedAccessory** - Actual accessories present
 - **RepairLog** - Repair tracking records
@@ -420,9 +440,10 @@ PAYMENT_RECEIVED → COMPLETED → Equipment enters inventory
 - `POST /api/incoming-gear/[id]/start-inspection` - Create inspection session (now auto-created on received)
 - `POST /api/incoming-gear/[id]/send-final-quote` - Send final quote to client
 - `POST /api/incoming-gear/[id]/mark-paid` - Mark purchase as paid (triggers repair workflow if flagged)
+- `POST /api/incoming-gear/sessions/[sessionId]/add-item` - Add additional product to existing inspection
 - `GET /api/incoming-gear/pending-items/[id]` - Get item inspection details
 - `PUT /api/incoming-gear/pending-items/[id]/inspection` - Update item inspection data
-- `PATCH /api/inspections/items/[itemId]` - Update purchase decision (not interested, mark for repair)
+- `PATCH /api/inspections/items/[itemId]` - Update purchase decision (not interested, mark for repair, repair notes)
 
 ### Quote Confirmation (Public)
 - `GET /api/quote-confirmation/[token]` - Get quote details
@@ -505,7 +526,8 @@ keysers-dashboard/
 │   ├── ui/                        # shadcn/ui components
 │   ├── dashboard/                 # Dashboard components
 │   └── inspection/                # Inspection components
-│       ├── ProductSearch.tsx      # Product search with auto-select
+│       ├── ProductSearch.tsx      # Product search with auto-select and smooth UX
+│       ├── AddItemModal.tsx       # Modal for adding additional products to inspections
 │       └── InspectItemModal.tsx   # Inspection modal (deprecated)
 ├── lib/
 │   ├── auth.ts                    # Authentication logic
@@ -537,10 +559,18 @@ keysers-dashboard/
 - [x] Smart payment calculations (instant payment vs consignment)
 - [x] Email notifications for pending payments
 - [x] Sidebar notification badges (Incoming Gear, Awaiting Payment, Repairs)
-- [x] "Not interested in purchasing" workflow with price zeroing
-- [x] "Mark for repair" workflow with post-payment repair tracking
+- [x] "Not interested in purchasing" workflow with reasons (Damage, Uneconomical, Mold, Other)
+- [x] Automatic price zeroing and input disabling for declined items
+- [x] "Mark for repair" workflow with repair notes and post-payment tracking
 - [x] Auto-inspection session creation on gear receipt
 - [x] Product visibility before gear receipt (for search/reference)
+- [x] Add Item modal for adding unexpected products to inspections
+- [x] Serial Number moved to Step 1 for earlier capture
+- [x] Purchase Decision moved to Step 2 (after condition assessment)
+- [x] Fixed-height containers to prevent layout shifts
+- [x] Expanded client state persistence using sessionStorage
+- [x] Smart ProductSearch with no flashing or visual glitches
+- [x] Empty search bar for new items vs auto-populated for quote items
 
 ### Planned
 - [ ] Advanced analytics and reporting
