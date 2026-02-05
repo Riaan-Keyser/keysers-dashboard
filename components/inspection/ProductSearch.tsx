@@ -75,6 +75,7 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
     setSelectedProduct(product)
     setSearchTerm(product.name)
     setShowResults(false)
+    setProducts([]) // Clear products to prevent dropdown from showing
     onSelect(product)
   }, [onSelect])
 
@@ -88,13 +89,14 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   // Debounced manual search (when user types)
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm && searchTerm !== initialSearch) {
+      // Don't search if a product is already selected
+      if (searchTerm && searchTerm !== initialSearch && !selectedProduct) {
         searchProducts(searchTerm, false)
       }
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, initialSearch, searchProducts])
+  }, [searchTerm, initialSearch, searchProducts, selectedProduct])
 
   return (
     <div className="relative">
