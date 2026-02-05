@@ -74,16 +74,16 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
   )
 
   const handleSelect = useCallback((product: Product) => {
+    justSelectedRef.current = true
+    setShowResults(false)
     setSelectedProduct(product)
     setSearchTerm(product.name)
-    setShowResults(false)
-    justSelectedRef.current = true
     onSelect(product)
     
     // Reset the flag after a short delay
     setTimeout(() => {
       justSelectedRef.current = false
-    }, 200)
+    }, 300)
   }, [onSelect])
 
   // Auto-search when component mounts with initialSearch
@@ -149,7 +149,15 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
             {products.map((product) => (
               <button
                 key={product.id}
-                onClick={() => handleSelect(product)}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleSelect(product)
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                }}
                 className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors"
               >
                 <div className="flex items-start justify-between">
