@@ -30,7 +30,7 @@ interface ProductSearchProps {
 }
 
 export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect = false }: ProductSearchProps) {
-  const [searchTerm, setSearchTerm] = useState(initialSearch)
+  const [searchTerm, setSearchTerm] = useState("")
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -109,25 +109,17 @@ export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect 
     fetchProductById()
   }, [value]) // Only depends on value, intentionally excludes selectedProduct to avoid loops
 
-  // Auto-search when component mounts with initialSearch (only once)
-  useEffect(() => {
-    if (initialSearch && initialSearch.length >= 2 && !hasInitialSearchRun.current) {
-      hasInitialSearchRun.current = true
-      searchProducts(initialSearch, autoSelect)
-    }
-  }, [initialSearch, autoSelect, searchProducts])
-
   // Debounced manual search (when user types)
   useEffect(() => {
     const timer = setTimeout(() => {
       // Don't search if a product is already selected
-      if (searchTerm && searchTerm !== initialSearch && !selectedProduct) {
+      if (searchTerm && !selectedProduct) {
         searchProducts(searchTerm, false)
       }
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, initialSearch, searchProducts, selectedProduct])
+  }, [searchTerm, searchProducts, selectedProduct])
 
   return (
     <div className="relative">

@@ -519,8 +519,6 @@ export default function ItemVerificationPage() {
             <ProductSearch
               value={selectedProduct?.id}
               onSelect={handleProductSelect}
-              initialSearch={item.clientName}
-              autoSelect={true}
             />
 
             {selectedProduct && (
