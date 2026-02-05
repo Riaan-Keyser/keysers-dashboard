@@ -217,7 +217,14 @@ export default function ItemVerificationPage() {
         body: JSON.stringify({ productId: product.id })
       })
 
-      if (!response.ok) throw new Error("Failed to identify product")
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        // Silent fail - just log for debugging if needed
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Product identification response:", response.status, errorData)
+        }
+        return
+      }
       
       const data = await response.json()
       
@@ -241,8 +248,10 @@ export default function ItemVerificationPage() {
         setAnswers(ansMap)
       }
     } catch (error) {
-      console.error("Failed to identify product:", error)
-      // Silent fail - product is already selected in UI
+      // Silent fail - product is already selected in UI, no need to show error
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Product select error:", error)
+      }
     }
   }
 
