@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { Lightbox } from "@/components/ui/lightbox"
+import { InspectItemModal } from "@/components/inspection/InspectItemModal"
 
 interface PendingItem {
   id: string
@@ -45,6 +46,7 @@ interface PendingPurchase {
   trackingNumber: string | null
   gearReceivedAt: string | null
   gearReceivedBy: { name: string } | null
+  clientNotifiedAt: string | null
   // Sprint 2: Inspection Integration
   inspectionSessionId: string | null
   inspectionSession: {
@@ -54,9 +56,12 @@ interface PendingPurchase {
     createdAt: string
     incomingItems: {
       id: string
-      status: string
+      clientName: string
+      inspectionStatus: string
       verifiedItem: {
-        status: string
+        locked: boolean
+        approvedAt: string | null
+        verifiedAt: string | null
       } | null
     }[]
   } | null
@@ -124,6 +129,13 @@ export default function IncomingGearPage() {
   // Sprint 2: Inspection state
   const [startingInspection, setStartingInspection] = useState<string | null>(null)
   const [sendingFinalQuote, setSendingFinalQuote] = useState<string | null>(null)
+  const [inspectingItemId, setInspectingItemId] = useState<string | null>(null)
+  const [inspectingPurchaseId, setInspectingPurchaseId] = useState<string | null>(null)
+  
+  // Undo state
+  const [undoingReceived, setUndoingReceived] = useState<string | null>(null)
+  const [notifyingClient, setNotifyingClient] = useState<string | null>(null)
+  const [currentTime, setCurrentTime] = useState(Date.now())
 
   useEffect(() => {
     fetchPurchases()
@@ -137,6 +149,15 @@ export default function IncomingGearPage() {
 
     return () => clearInterval(interval)
   }, [statusFilter])
+
+  // Update current time every second for countdown timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 1000) // 1 second
+
+    return () => clearInterval(interval)
+  }, [])
 
   const fetchPurchases = async (silent = false) => {
     if (!silent) {
@@ -339,7 +360,7 @@ export default function IncomingGearPage() {
   }
 
   const handleMarkAsReceived = async (purchaseId: string, customerName: string) => {
-    if (!confirm(`Confirm that you have physically received the gear from ${customerName}?\n\nThis will:\n- Update status to "Inspection In Progress"\n- Send confirmation email to the client\n- Allow you to start the inspection process`)) {
+    if (!confirm(`Confirm that you have physically received the gear from ${customerName}?\n\nThis will:\n- Update status to "Inspection In Progress"\n- Client will be notified in 10 minutes\n- You can undo this action within 10 minutes`)) {
       return
     }
 
@@ -349,7 +370,7 @@ export default function IncomingGearPage() {
       })
 
       if (response.ok) {
-        alert(`✅ Gear marked as received!\n\nEmail confirmation sent to ${customerName}.\n\nYou can now start the inspection process.`)
+        alert(`✅ Gear marked as received!\n\nThe client will be notified in 10 minutes.\n\nYou can undo this action before then if needed.`)
         fetchPurchases()
       } else {
         const data = await response.json()
@@ -361,11 +382,74 @@ export default function IncomingGearPage() {
     }
   }
 
-  const handleStartInspection = async (purchaseId: string, customerName: string) => {
-    if (!confirm(`Start inspection for ${customerName}?\n\nThis will:\n- Create an inspection session\n- Copy all items for verification\n- Redirect you to the inspection page`)) {
+  const handleUndoReceived = async (purchaseId: string, customerName: string) => {
+    if (!confirm(`Undo "Mark as Received" for ${customerName}?\n\nThis will reset the status and the client will NOT be notified.`)) {
       return
     }
 
+    setUndoingReceived(purchaseId)
+
+    try {
+      const response = await fetch(`/api/incoming-gear/${purchaseId}/undo-received`, {
+        method: "POST"
+      })
+
+      if (response.ok) {
+        alert(`✅ Action undone successfully!\n\nStatus reset for ${customerName}.`)
+        fetchPurchases()
+      } else {
+        const data = await response.json()
+        alert(`❌ Failed: ${data.error || "Unable to undo"}`)
+      }
+    } catch (error) {
+      console.error("Failed to undo:", error)
+      alert("Failed to undo action")
+    } finally {
+      setUndoingReceived(null)
+    }
+  }
+
+  const handleNotifyClient = async (purchaseId: string, customerName: string) => {
+    setNotifyingClient(purchaseId)
+
+    try {
+      const response = await fetch(`/api/incoming-gear/${purchaseId}/notify-client`, {
+        method: "POST"
+      })
+
+      if (response.ok) {
+        fetchPurchases()
+      } else {
+        const data = await response.json()
+        console.error(`Failed to notify ${customerName}:`, data.error)
+      }
+    } catch (error) {
+      console.error("Failed to notify client:", error)
+    } finally {
+      setNotifyingClient(null)
+    }
+  }
+
+  const getTimeRemaining = (gearReceivedAt: string | null, clientNotifiedAt: string | null) => {
+    if (!gearReceivedAt) return null
+    if (clientNotifiedAt) return 0 // Already notified
+    
+    const receivedTime = new Date(gearReceivedAt).getTime()
+    const tenMinutes = 10 * 60 * 1000
+    const notifyTime = receivedTime + tenMinutes
+    const remaining = notifyTime - currentTime
+    
+    if (remaining <= 0) return 0 // Time expired
+    return remaining
+  }
+
+  const formatTimeRemaining = (ms: number): string => {
+    const minutes = Math.floor(ms / 60000)
+    const seconds = Math.floor((ms % 60000) / 1000)
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  const handleStartInspection = async (purchaseId: string, customerName: string) => {
     setStartingInspection(purchaseId)
 
     try {
@@ -376,14 +460,13 @@ export default function IncomingGearPage() {
       const data = await response.json()
 
       if (response.ok) {
-        alert(`✅ Inspection session created!\n\nSession: ${data.sessionName}\nItems: ${data.itemCount}\n\nRedirecting to inspection page...`)
+        // Redirect directly to inspection page
         window.location.href = data.redirectUrl
       } else {
-        alert(`❌ Failed: ${data.error || "Unable to start inspection"}`)
+        console.error("Failed to start inspection:", data.error)
       }
     } catch (error) {
       console.error("Failed to start inspection:", error)
-      alert("Failed to start inspection")
     } finally {
       setStartingInspection(null)
     }
@@ -417,6 +500,11 @@ export default function IncomingGearPage() {
     }
   }
 
+  const handleInspectItem = async (purchaseId: string, itemId: string) => {
+    setInspectingPurchaseId(purchaseId)
+    setInspectingItemId(itemId)
+  }
+
   const getStatusColor = (status: string): "default" | "success" | "warning" | "danger" | "info" => {
     const colors: Record<string, any> = {
       PENDING_REVIEW: "warning",
@@ -444,6 +532,21 @@ export default function IncomingGearPage() {
       ADDED_TO_INVENTORY: "success"
     }
     return colors[status] || "default"
+  }
+
+  const getInspectionStatus = (purchase: PendingPurchase, itemName: string): "UNVERIFIED" | "VERIFIED" | "IN_PROGRESS" | null => {
+    if (!purchase.inspectionSession?.incomingItems) return null
+    
+    const incomingItem = purchase.inspectionSession.incomingItems.find(
+      incoming => incoming.clientName === itemName
+    )
+    
+    return incomingItem?.inspectionStatus || null
+  }
+
+  const isItemInspected = (purchase: PendingPurchase, itemName: string): boolean => {
+    const status = getInspectionStatus(purchase, itemName)
+    return status === "VERIFIED"
   }
 
   const pendingCount = purchases.filter(p => p.status === "PENDING_REVIEW").length
@@ -608,48 +711,134 @@ export default function IncomingGearPage() {
                 {/* Expanded Items */}
                 {isExpanded && (
                   <div className="border-t bg-gray-50 p-3">
-                    {/* Tracking Info & Mark as Received Button */}
-                    {purchase.trackingNumber && (
-                      <div className="bg-white rounded-lg border p-4 mb-4">
+                    {/* Tracking Info & Mark as Received / Undo / Client Informed */}
+                    {(purchase.trackingNumber || (purchase.status === 'AWAITING_DELIVERY' || purchase.status === 'PENDING_REVIEW' || purchase.status === 'INSPECTION_IN_PROGRESS')) && (
+                      <div className={`rounded-lg border p-4 mb-4 ${
+                        purchase.clientNotifiedAt ? 'bg-green-50 border-green-200' :
+                        purchase.gearReceivedAt ? 'bg-yellow-50 border-yellow-200' : 
+                        'bg-white'
+                      }`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                              <Truck className="h-5 w-5 text-blue-600" />
-                              <div>
-                                <p className="text-xs text-gray-500">Courier</p>
-                                <p className="text-sm font-medium text-gray-900">{purchase.courierCompany}</p>
+                            {purchase.trackingNumber ? (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <Truck className="h-5 w-5 text-blue-600" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">Courier</p>
+                                    <p className="text-sm font-medium text-gray-900">{purchase.courierCompany}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Package className="h-5 w-5 text-blue-600" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">Tracking Number</p>
+                                    <p className="text-sm font-medium text-gray-900">{purchase.trackingNumber}</p>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <Package className="h-5 w-5 text-gray-400" />
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700">
+                                    {purchase.gearReceivedAt ? 'Gear Received (In-person)' : 'Awaiting Gear Delivery'}
+                                  </p>
+                                  {!purchase.gearReceivedAt && (
+                                    <p className="text-xs text-gray-500">No tracking submitted - client may drop off in person</p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Package className="h-5 w-5 text-blue-600" />
-                              <div>
-                                <p className="text-xs text-gray-500">Tracking Number</p>
-                                <p className="text-sm font-medium text-gray-900">{purchase.trackingNumber}</p>
-                              </div>
-                            </div>
-                            {purchase.gearReceivedAt && (
+                            )}
+                            
+                            {/* Show received info if marked */}
+                            {purchase.gearReceivedAt && !purchase.clientNotifiedAt && (
                               <div className="flex items-center gap-2">
                                 <CheckCircle className="h-5 w-5 text-green-600" />
                                 <div>
-                                  <p className="text-xs text-gray-500">Received</p>
-                                  <p className="text-sm font-medium text-gray-900">
-                                    {new Date(purchase.gearReceivedAt).toLocaleDateString()} by {purchase.gearReceivedBy?.name || "Staff"}
-                                  </p>
+                                  <p className="text-xs text-gray-500">Received by</p>
+                                  <p className="text-sm font-medium text-gray-900">{purchase.gearReceivedBy?.name || "Staff"}</p>
                                 </div>
                               </div>
                             )}
                           </div>
-                          {!purchase.gearReceivedAt && (
-                            <Button
-                              onClick={() => handleMarkAsReceived(purchase.id, purchase.customerName)}
-                              variant="outline"
-                              size="sm"
-                              className="border-green-600 text-green-600 hover:bg-green-50"
-                            >
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              Mark as Received
-                            </Button>
-                          )}
+                          
+                          {/* Three button states */}
+                          {(() => {
+                            const timeRemaining = getTimeRemaining(purchase.gearReceivedAt, purchase.clientNotifiedAt)
+                            
+                            // State 3: Client Informed (after 10 min or notified)
+                            if (purchase.clientNotifiedAt) {
+                              return (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-green-100 rounded-md">
+                                  <CheckCircle className="h-4 w-4 text-green-700" />
+                                  <span className="text-sm font-medium text-green-700">Client Informed</span>
+                                </div>
+                              )
+                            }
+                            
+                            // State 2: Undo button (within 10 minutes)
+                            if (purchase.gearReceivedAt && timeRemaining !== null && timeRemaining > 0) {
+                              return (
+                                <div className="flex items-center gap-3">
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-500">Notifying in</p>
+                                    <p className="text-sm font-mono font-bold text-orange-600">
+                                      {formatTimeRemaining(timeRemaining)}
+                                    </p>
+                                  </div>
+                                  <Button
+                                    onClick={() => handleUndoReceived(purchase.id, purchase.customerName)}
+                                    disabled={undoingReceived === purchase.id}
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                                  >
+                                    {undoingReceived === purchase.id ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Undoing...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <X className="h-4 w-4 mr-2" />
+                                        Undo
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              )
+                            }
+                            
+                            // Trigger notification if 10 minutes passed
+                            if (purchase.gearReceivedAt && timeRemaining === 0 && !purchase.clientNotifiedAt && notifyingClient !== purchase.id) {
+                              // Auto-trigger notification
+                              setTimeout(() => handleNotifyClient(purchase.id, purchase.customerName), 100)
+                              return (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-blue-100 rounded-md">
+                                  <Loader2 className="h-4 w-4 animate-spin text-blue-700" />
+                                  <span className="text-sm font-medium text-blue-700">Notifying client...</span>
+                                </div>
+                              )
+                            }
+                            
+                            // State 1: Mark as Received button (initial state)
+                            if (!purchase.gearReceivedAt) {
+                              return (
+                                <Button
+                                  onClick={() => handleMarkAsReceived(purchase.id, purchase.customerName)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-green-600 text-green-600 hover:bg-green-50"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Mark as Received
+                                </Button>
+                              )
+                            }
+                            
+                            return null
+                          })()}
                         </div>
                       </div>
                     )}
@@ -704,32 +893,32 @@ export default function IncomingGearPage() {
                             {purchase.inspectionSession && (
                               <div className="mb-3">
                                 {(() => {
-                                  const approvedCount = purchase.inspectionSession.incomingItems.filter(
-                                    item => item.verifiedItem?.status === "APPROVED"
+                                  const verifiedCount = purchase.inspectionSession.incomingItems.filter(
+                                    item => item.inspectionStatus === "VERIFIED"
                                   ).length
                                   const totalCount = purchase.inspectionSession.incomingItems.length
-                                  const percentage = Math.round((approvedCount / totalCount) * 100)
-                                  const allApproved = approvedCount === totalCount && totalCount > 0
+                                  const percentage = Math.round((verifiedCount / totalCount) * 100)
+                                  const allVerified = verifiedCount === totalCount && totalCount > 0
 
                                   return (
                                     <>
                                       <div className="flex items-center justify-between mb-1">
                                         <span className="text-sm font-medium text-gray-700">
-                                          Progress: {approvedCount}/{totalCount} items approved
+                                          Progress: {verifiedCount}/{totalCount} items inspected
                                         </span>
                                         <span className="text-sm font-semibold text-blue-600">{percentage}%</span>
                                       </div>
                                       <div className="w-full bg-gray-200 rounded-full h-2">
                                         <div
                                           className={`h-2 rounded-full transition-all ${
-                                            allApproved ? "bg-green-600" : "bg-blue-600"
+                                            allVerified ? "bg-green-600" : "bg-blue-600"
                                           }`}
                                           style={{ width: `${percentage}%` }}
                                         />
                                       </div>
-                                      {allApproved && (
+                                      {allVerified && (
                                         <p className="text-xs text-green-600 font-medium mt-1">
-                                          ✅ All items approved! Ready to send final quote.
+                                          ✅ All items inspected! Ready to send final quote.
                                         </p>
                                       )}
                                     </>
@@ -753,8 +942,8 @@ export default function IncomingGearPage() {
                               {purchase.inspectionSession && 
                                purchase.inspectionSession.incomingItems.length > 0 &&
                                purchase.inspectionSession.incomingItems.every(
-                                 item => item.verifiedItem?.status === "APPROVED"
-                               ) && (
+                                 item => item.inspectionStatus === "VERIFIED"
+                               ) && !purchase.finalQuoteSentAt && (
                                 <Button
                                   onClick={() => handleSendFinalQuote(purchase.id, purchase.customerName, purchase.customerEmail!)}
                                   disabled={sendingFinalQuote === purchase.id || !purchase.customerEmail}
@@ -794,200 +983,6 @@ export default function IncomingGearPage() {
                         </div>
                       </div>
                     )}
-
-                    {/* Column Headers */}
-                    <div className="grid grid-cols-[minmax(500px,1fr)_110px_110px_110px_110px_110px_80px_minmax(280px,1fr)] gap-x-16 mb-3">
-                      <div className="justify-self-start"></div> {/* Empty for product name column */}
-                      <div className="text-center"></div> {/* Empty for status column */}
-                      <div className="text-sm text-gray-500 font-medium text-center w-full">Buy Low</div>
-                      <div className="text-sm text-gray-500 font-medium text-center w-full">Buy High</div>
-                      <div className="text-sm text-gray-500 font-medium text-center whitespace-nowrap w-full">Consignment Low</div>
-                      <div className="text-sm text-gray-500 font-medium text-center whitespace-nowrap w-full">Consignment High</div>
-                      <div className="text-center"></div> {/* Empty for image column */}
-                      <div className="justify-self-end"></div> {/* Empty for actions column */}
-                    </div>
-
-                    <div className="space-y-3">
-                      {purchase.items.map((item) => (
-                        <div key={item.id} className="bg-white rounded-lg border p-2 pr-2">
-                          <div className="grid grid-cols-[minmax(500px,1fr)_110px_110px_110px_110px_110px_80px_minmax(280px,1fr)] gap-x-16 items-center">
-                            {/* Product Name */}
-                            <div className="min-w-0 justify-self-start">
-                              <h4 className="font-medium text-gray-900 break-words">{item.name}</h4>
-                            </div>
-
-                            {/* Status */}
-                            <div className="flex items-center">
-                              <Badge variant={getItemStatusColor(item.status)} className="flex-shrink-0">
-                                {item.status.replace(/_/g, " ")}
-                              </Badge>
-                            </div>
-
-                            {/* Buy Low */}
-                            <div className="flex items-center justify-center">
-                              <p className="font-medium text-sm whitespace-nowrap">
-                                {formatPrice(item.botEstimatedPrice)}
-                              </p>
-                            </div>
-
-                            {/* Buy High */}
-                            <div className="flex items-center justify-center">
-                              <p className="font-medium text-sm whitespace-nowrap">
-                                {formatPrice(item.suggestedSellPrice)}
-                              </p>
-                            </div>
-
-                            {/* Consignment Low */}
-                            <div className="flex items-center justify-center">
-                              <p className="font-medium text-sm text-orange-600 whitespace-nowrap">
-                                {item.proposedPrice ? formatPrice(item.proposedPrice * 0.7) : "-"}
-                              </p>
-                            </div>
-
-                            {/* Consignment High */}
-                            <div className="flex items-center justify-center">
-                              <p className="font-medium text-sm text-orange-600 whitespace-nowrap">
-                                {item.suggestedSellPrice ? formatPrice(item.suggestedSellPrice * 0.7) : "-"}
-                              </p>
-                            </div>
-
-                            {/* Image - clickable for lightbox */}
-                            <div className="flex items-center">
-                              {item.imageUrls.length > 0 ? (
-                                <button
-                                  onClick={() => openLightbox(item.imageUrls, 0)}
-                                  className="relative h-12 w-12 flex-shrink-0 group"
-                                >
-                                  <img
-                                    src={item.imageUrls[0]}
-                                    alt={item.name}
-                                    className="h-full w-full object-cover rounded border group-hover:opacity-75 transition-opacity"
-                                  />
-                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded">
-                                    <ZoomIn className="h-4 w-4 text-white drop-shadow-lg" />
-                                  </div>
-                                  {item.imageUrls.length > 1 && (
-                                    <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center text-[10px]">
-                                      {item.imageUrls.length}
-                                    </span>
-                                  )}
-                                </button>
-                              ) : (
-                                <div className="h-12 w-12 flex-shrink-0 bg-gray-100 rounded border flex items-center justify-center">
-                                  <span className="text-xs text-gray-400">No image</span>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Actions - Edit button anchored to far right */}
-                            <div className="flex gap-2 w-full pr-0 justify-self-end">
-                              {item.status === "PENDING" || item.status === "PRICE_ADJUSTED" ? (
-                                <>
-                                  <Button size="sm" onClick={(e) => handleApproveItem(item.id, e)} className="bg-green-600 hover:bg-green-700">
-                                    <Check className="h-4 w-4 mr-1" />
-                                    Approve
-                                  </Button>
-                                  <Button size="sm" variant="destructive" onClick={(e) => handleRejectItem(item.id, e)}>
-                                    <X className="h-4 w-4 mr-1" />
-                                    Reject
-                                  </Button>
-                                </>
-                              ) : null}
-                              <div className="flex-1"></div>
-                              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openEditModal(item); }} className="mr-0">
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Supplier Invoice Summary */}
-                      {approvedItems > 0 && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                          <h4 className="font-semibold text-blue-900 mb-2">Supplier Invoice</h4>
-                          <div className="space-y-1 text-sm">
-                            {purchase.items.filter(i => i.status === "APPROVED" || i.status === "PRICE_ADJUSTED").map(item => (
-                              <div key={item.id} className="flex justify-between">
-                                <span className="text-blue-700">{item.name}</span>
-                                <span className="font-medium text-blue-900">
-                                  {formatPrice(item.finalPrice || item.proposedPrice || 0)}
-                                </span>
-                              </div>
-                            ))}
-                            <div className="flex justify-between pt-2 border-t border-blue-300">
-                              <span className="font-bold text-blue-900">TOTAL</span>
-                              <span className="font-bold text-blue-900 text-lg">
-                                {formatPrice(purchase.items
-                                  .filter(i => i.status === "APPROVED" || i.status === "PRICE_ADJUSTED")
-                                  .reduce((sum, i) => sum + (i.finalPrice || i.proposedPrice || 0), 0))}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Purchase Actions */}
-                      {approvedItems > 0 && purchase.status === "PENDING_REVIEW" && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-green-800">
-                                {approvedItems} of {purchase.items.length} items approved
-                              </p>
-                              <p className="text-sm text-green-600">Ready to send to client for acceptance</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                onClick={() => handleSendQuote(purchase)}
-                                disabled={sendingQuote === purchase.id}
-                                className="bg-purple-600 hover:bg-purple-700"
-                              >
-                                <Send className="h-4 w-4 mr-2" />
-                                {sendingQuote === purchase.id ? "Sending..." : "Confirm Quote"}
-                              </Button>
-                              <Button
-                                onClick={() => handleApprovePurchase(purchase.id)}
-                                className="bg-green-600 hover:bg-green-700"
-                              >
-                                <Check className="h-4 w-4 mr-2" />
-                                Approve for Payment
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {purchase.invoiceNumber && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-medium text-yellow-800">
-                                📧 Invoice <strong>{purchase.invoiceNumber}</strong> sent to client
-                              </p>
-                              <p className="text-xs text-yellow-600 mt-1">
-                                Sent to: {purchase.customerEmail || "No email"} • Awaiting client acceptance
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleApprovePurchase(purchase.id)}
-                              className="border-yellow-600 text-yellow-700 hover:bg-yellow-50"
-                            >
-                              📧 Resend to Client
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {purchase.status === "ADDED_TO_INVENTORY" && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                          ✅ This purchase has been added to inventory
-                        </div>
-                      )}
-                    </div>
                   </div>
                 )}
               </Card>
@@ -1165,6 +1160,22 @@ export default function IncomingGearPage() {
           </div>
         )}
       </Modal>
+
+      {/* Inspection Modal */}
+      {inspectingItemId && inspectingPurchaseId && (
+        <InspectItemModal
+          open={true}
+          onClose={() => {
+            setInspectingItemId(null)
+            setInspectingPurchaseId(null)
+          }}
+          purchaseId={inspectingPurchaseId}
+          itemId={inspectingItemId}
+          onSaved={() => {
+            fetchPurchases()
+          }}
+        />
+      )}
     </div>
   )
 }

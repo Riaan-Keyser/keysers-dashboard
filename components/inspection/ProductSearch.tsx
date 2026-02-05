@@ -25,18 +25,20 @@ interface ProductSearchProps {
   value?: string // selected product ID
   onSelect: (product: Product) => void
   initialSearch?: string
+  autoSelect?: boolean // Auto-select first result if available
 }
 
-export function ProductSearch({ value, onSelect, initialSearch = "" }: ProductSearchProps) {
+export function ProductSearch({ value, onSelect, initialSearch = "", autoSelect = false }: ProductSearchProps) {
   const [searchTerm, setSearchTerm] = useState(initialSearch)
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showResults, setShowResults] = useState(false)
+  const [hasAutoSelected, setHasAutoSelected] = useState(false)
 
   // Debounced search
   const searchProducts = useCallback(
-    async (term: string) => {
+    async (term: string, shouldAutoSelect: boolean = false) => {
       if (term.length < 2) {
         setProducts([])
         return
@@ -46,33 +48,53 @@ export function ProductSearch({ value, onSelect, initialSearch = "" }: ProductSe
       try {
         const response = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=20`)
         const data = await response.json()
-        setProducts(data.products || [])
-        setShowResults(true)
+        const fetchedProducts = data.products || []
+        setProducts(fetchedProducts)
+        
+        // If autoSelect is enabled and we have results, select first one immediately
+        if (shouldAutoSelect && fetchedProducts.length > 0 && !hasAutoSelected) {
+          const firstProduct = fetchedProducts[0]
+          setSelectedProduct(firstProduct)
+          setSearchTerm(firstProduct.name)
+          setShowResults(false)
+          setHasAutoSelected(true)
+          onSelect(firstProduct)
+        } else {
+          setShowResults(true)
+        }
       } catch (error) {
         console.error("Failed to search products:", error)
       } finally {
         setLoading(false)
       }
     },
-    []
+    [hasAutoSelected, onSelect]
   )
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchTerm) {
-        searchProducts(searchTerm)
-      }
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [searchTerm, searchProducts])
-
-  const handleSelect = (product: Product) => {
+  const handleSelect = useCallback((product: Product) => {
     setSelectedProduct(product)
     setSearchTerm(product.name)
     setShowResults(false)
     onSelect(product)
-  }
+  }, [onSelect])
+
+  // Auto-search when component mounts with initialSearch
+  useEffect(() => {
+    if (initialSearch && initialSearch.length >= 2 && !selectedProduct) {
+      searchProducts(initialSearch, autoSelect)
+    }
+  }, [initialSearch, autoSelect, searchProducts, selectedProduct])
+
+  // Debounced manual search (when user types)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm && searchTerm !== initialSearch) {
+        searchProducts(searchTerm, false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchTerm, initialSearch, searchProducts])
 
   return (
     <div className="relative">

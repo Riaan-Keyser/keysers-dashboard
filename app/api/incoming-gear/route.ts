@@ -28,6 +28,24 @@ export async function GET(request: NextRequest) {
         },
         approvedBy: {
           select: { id: true, name: true }
+        },
+        gearReceivedBy: {
+          select: { id: true, name: true }
+        },
+        inspectionSession: {
+          include: {
+            incomingItems: {
+              include: {
+                verifiedItem: {
+                  select: {
+                    locked: true,
+                    approvedAt: true,
+                    verifiedAt: true
+                  }
+                }
+              }
+            }
+          }
         }
       },
       orderBy: { createdAt: "desc" }

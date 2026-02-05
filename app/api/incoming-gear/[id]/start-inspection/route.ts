@@ -73,15 +73,13 @@ export async function POST(
         createdById: session.user.id,
         incomingItems: {
           create: purchase.items.map((item) => ({
-            clientSubmittedName: item.name,
-            clientSubmittedBrand: item.brand,
-            clientSubmittedModel: item.model,
-            clientSubmittedCondition: item.condition,
-            clientSubmittedDescription: item.description,
-            clientSubmittedImages: item.imageUrls,
-            clientEstimatedValue: item.proposedPrice || item.botEstimatedPrice,
-            status: "UNVERIFIED",
-            category: item.category as any || "OTHER"
+            clientName: item.name,
+            clientBrand: item.brand,
+            clientModel: item.model,
+            clientCondition: item.condition,
+            clientDescription: item.description,
+            clientImages: item.imageUrls,
+            inspectionStatus: "UNVERIFIED"
           }))
         }
       },

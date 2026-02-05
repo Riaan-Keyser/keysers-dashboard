@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { InspectionStepper } from "@/components/inspection/InspectionStepper"
 import { ProductSearch } from "@/components/inspection/ProductSearch"
 import { formatPrice } from "@/lib/inspection-pricing"
-import { ArrowLeft, ArrowRight, Save, Check, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, Save, Check, X, ChevronDown, ChevronUp } from "lucide-react"
 
 const STEPS = [
   { id: "identify", name: "Identify", description: "Select product" },
@@ -108,6 +109,7 @@ export default function ItemVerificationPage() {
   const params = useParams()
   const sessionId = params.id as string
   const itemId = params.itemId as string
+  const { data: session } = useSession()
 
   const [currentStep, setCurrentStep] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -153,6 +155,10 @@ export default function ItemVerificationPage() {
         setVerifiedCondition(data.item.verifiedItem.verifiedCondition)
         setGeneralNotes(data.item.verifiedItem.generalNotes || "")
         
+        // Load question templates and accessory templates
+        setQuestions(data.item.verifiedItem.product.questionTemplates || [])
+        setAccessories(data.item.verifiedItem.product.accessories || [])
+        
         // Load answers
         const answersMap: Record<string, { answer: string; notes: string }> = {}
         data.item.verifiedItem.answers.forEach((a: any) => {
@@ -160,11 +166,19 @@ export default function ItemVerificationPage() {
         })
         setAnswers(answersMap)
 
-        // Load accessories
+        // Load accessories (existing verified accessories + initialize missing ones from templates)
         const accessoriesMap: Record<string, { isPresent: boolean; notes: string }> = {}
+        
+        // First, initialize all accessories from templates with default values
+        data.item.verifiedItem.product.accessories.forEach((template: any) => {
+          accessoriesMap[template.accessoryName] = { isPresent: false, notes: "" }
+        })
+        
+        // Then, overwrite with verified accessories (if they exist)
         data.item.verifiedItem.accessories.forEach((a: any) => {
           accessoriesMap[a.accessoryName] = { isPresent: a.isPresent, notes: a.notes || "" }
         })
+        
         setAccessoryStates(accessoriesMap)
 
         // Load override if exists
@@ -177,14 +191,8 @@ export default function ItemVerificationPage() {
           setOverrideNotes(override.notes || "")
         }
 
-        // Determine which step to show based on status
-        if (data.item.inspectionStatus === "APPROVED") {
-          setCurrentStep(3) // Show approve step
-        } else if (data.item.verifiedItem.pricingSnapshot) {
-          setCurrentStep(2) // Show pricing step
-        } else {
-          setCurrentStep(1) // Show verify step
-        }
+        // Always start at step 0 (Identify Product) so user can review and click "Next: Verification"
+        setCurrentStep(0)
       }
     } catch (error) {
       console.error("Failed to fetch item:", error)
@@ -195,6 +203,11 @@ export default function ItemVerificationPage() {
 
   const handleProductSelect = async (product: Product) => {
     setSelectedProduct(product)
+    
+    // If this product is already linked (same as existing verifiedItem), skip API call
+    if (item?.verifiedItem?.product?.id === product.id) {
+      return
+    }
     
     try {
       // Identify the product
@@ -229,7 +242,7 @@ export default function ItemVerificationPage() {
       }
     } catch (error) {
       console.error("Failed to identify product:", error)
-      alert("Failed to identify product")
+      // Silent fail - product is already selected in UI
     }
   }
 
@@ -294,19 +307,17 @@ export default function ItemVerificationPage() {
         throw new Error(error.error || "Failed to apply override")
       }
       
+      const currentStepValue = currentStep // Preserve current step
       await fetchItem()
-      alert("Price override applied successfully")
+      setCurrentStep(currentStepValue) // Restore step after refresh
     } catch (error: any) {
       console.error("Failed to apply override:", error)
-      alert(error.message || "Failed to apply override")
     } finally {
       setSaving(false)
     }
   }
 
   const handleRevertOverride = async () => {
-    if (!confirm("Are you sure you want to revert to auto pricing?")) return
-
     try {
       setSaving(true)
       
@@ -316,7 +327,9 @@ export default function ItemVerificationPage() {
 
       if (!response.ok) throw new Error("Failed to revert override")
       
+      const currentStepValue = currentStep // Preserve current step
       await fetchItem()
+      setCurrentStep(currentStepValue) // Restore step after refresh
       setShowOverride(false)
       setOverrideBuyPrice("")
       setOverrideConsignPrice("")
@@ -324,15 +337,12 @@ export default function ItemVerificationPage() {
       setOverrideNotes("")
     } catch (error) {
       console.error("Failed to revert override:", error)
-      alert("Failed to revert override")
     } finally {
       setSaving(false)
     }
   }
 
   const handleApprove = async () => {
-    if (!confirm("Are you sure you want to approve this item? It will be locked.")) return
-
     try {
       setSaving(true)
       
@@ -344,11 +354,9 @@ export default function ItemVerificationPage() {
 
       if (!response.ok) throw new Error("Failed to approve item")
       
-      alert("Item approved successfully!")
       router.push(`/dashboard/inspections/${sessionId}`)
     } catch (error) {
       console.error("Failed to approve item:", error)
-      alert("Failed to approve item")
     } finally {
       setSaving(false)
     }
@@ -385,7 +393,6 @@ export default function ItemVerificationPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Verify Item</h1>
-          <p className="text-gray-500">{item.clientName}</p>
         </div>
         {item.verifiedItem?.locked && (
           <Badge className="bg-green-100 text-green-800">
@@ -421,7 +428,8 @@ export default function ItemVerificationPage() {
             <ProductSearch
               value={selectedProduct?.id}
               onSelect={handleProductSelect}
-              initialSearch={item.clientBrand || item.clientModel || item.clientName}
+              initialSearch={item.clientName}
+              autoSelect={true}
             />
 
             {selectedProduct && (
@@ -528,35 +536,33 @@ export default function ItemVerificationPage() {
             {accessories.length > 0 && (
               <Card className="p-6">
                 <h3 className="text-lg font-semibold mb-4">Accessories Checklist</h3>
-                <div className="space-y-3">
-                  {accessories.map((acc) => (
-                    <div key={acc.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                      <input
-                        type="checkbox"
-                        checked={accessoryStates[acc.accessoryName]?.isPresent || false}
-                        onChange={(e) => setAccessoryStates({
-                          ...accessoryStates,
-                          [acc.accessoryName]: {
-                            ...accessoryStates[acc.accessoryName],
-                            isPresent: e.target.checked
-                          }
-                        })}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-gray-900">{acc.accessoryName}</span>
-                          <div className="flex gap-2">
-                            {acc.isRequired && <Badge variant="secondary">Required</Badge>}
-                            {acc.penaltyAmount && (
-                              <Badge className="bg-red-100 text-red-800">
-                                Penalty: {formatPrice(acc.penaltyAmount)}
-                              </Badge>
-                            )}
-                          </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {accessories.map((acc) => {
+                    const isChecked = accessoryStates[acc.accessoryName]?.isPresent || false
+                    return (
+                      <div key={acc.id} className="p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => setAccessoryStates({
+                              ...accessoryStates,
+                              [acc.accessoryName]: {
+                                ...accessoryStates[acc.accessoryName],
+                                isPresent: e.target.checked
+                              }
+                            })}
+                            className="h-4 w-4"
+                          />
+                          <span className="font-medium text-sm flex-1">{acc.accessoryName}</span>
+                          {!isChecked && acc.penaltyAmount && (
+                            <Badge className="bg-red-100 text-red-800 text-xs">
+                              -{formatPrice(acc.penaltyAmount)}
+                            </Badge>
+                          )}
                         </div>
                         <Input
-                          placeholder="Optional notes..."
+                          placeholder="Notes (optional)"
                           value={accessoryStates[acc.accessoryName]?.notes || ""}
                           onChange={(e) => setAccessoryStates({
                             ...accessoryStates,
@@ -565,11 +571,11 @@ export default function ItemVerificationPage() {
                               notes: e.target.value
                             }
                           })}
-                          className="text-sm mt-2"
+                          className="text-xs h-8"
                         />
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </Card>
             )}
@@ -661,23 +667,23 @@ export default function ItemVerificationPage() {
               </div>
             </Card>
 
-            {/* Override Section */}
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Price Override</h3>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showOverride}
-                    onChange={(e) => setShowOverride(e.target.checked)}
-                    className="rounded"
-                  />
-                  <span className="text-sm font-medium">Enable Override</span>
-                </label>
-              </div>
+            {/* Override Section - Admin Only */}
+            {session?.user?.role === "ADMIN" && (
+              <Card className="p-6">
+                <div 
+                  className="flex items-center justify-between cursor-pointer hover:bg-gray-50 -m-6 p-6 rounded-t-lg transition-colors"
+                  onClick={() => setShowOverride(!showOverride)}
+                >
+                  <h3 className="text-lg font-semibold">Price Override</h3>
+                  {showOverride ? (
+                    <ChevronUp className="h-5 w-5 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-gray-500" />
+                  )}
+                </div>
 
-              {showOverride && (
-                <div className="space-y-4">
+                {showOverride && (
+                <div className="space-y-4 mt-4">
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -710,7 +716,7 @@ export default function ItemVerificationPage() {
                     <select
                       value={overrideReason}
                       onChange={(e) => setOverrideReason(e.target.value)}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className="w-full h-10 px-3 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     >
                       <option value="">Select a reason...</option>
                       <option value="MARKET_RESEARCH">Market Research</option>
@@ -772,7 +778,8 @@ export default function ItemVerificationPage() {
                   )}
                 </div>
               )}
-            </Card>
+              </Card>
+            )}
 
             {/* Final Prices */}
             <Card className="p-6 bg-green-50 border-green-200">
@@ -780,27 +787,31 @@ export default function ItemVerificationPage() {
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Buy Price:</p>
-                  <p className="text-2xl font-bold text-green-900">
-                    {formatPrice(
-                      item.verifiedItem.priceOverride?.overrideBuyPrice ??
-                      item.verifiedItem.pricingSnapshot.finalBuyPrice
-                    )}
+                  <div className="text-2xl font-bold text-green-900 flex items-center gap-2">
+                    <span>
+                      {formatPrice(
+                        item.verifiedItem.priceOverride?.overrideBuyPrice ??
+                        item.verifiedItem.pricingSnapshot.finalBuyPrice
+                      )}
+                    </span>
                     {item.verifiedItem.priceOverride?.overrideBuyPrice && (
-                      <Badge className="ml-2 bg-yellow-100 text-yellow-800">Overridden</Badge>
+                      <Badge className="bg-yellow-100 text-yellow-800">Overridden</Badge>
                     )}
-                  </p>
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Consignment Price:</p>
-                  <p className="text-2xl font-bold text-green-900">
-                    {formatPrice(
-                      item.verifiedItem.priceOverride?.overrideConsignPrice ??
-                      item.verifiedItem.pricingSnapshot.finalConsignPrice
-                    )}
+                  <div className="text-2xl font-bold text-green-900 flex items-center gap-2">
+                    <span>
+                      {formatPrice(
+                        item.verifiedItem.priceOverride?.overrideConsignPrice ??
+                        item.verifiedItem.pricingSnapshot.finalConsignPrice
+                      )}
+                    </span>
                     {item.verifiedItem.priceOverride?.overrideConsignPrice && (
-                      <Badge className="ml-2 bg-yellow-100 text-yellow-800">Overridden</Badge>
+                      <Badge className="bg-yellow-100 text-yellow-800">Overridden</Badge>
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
             </Card>

@@ -18,6 +18,8 @@ export async function GET(
 
     const { itemId } = await params
 
+    console.log(`🔍 Fetching item with ID: ${itemId}`)
+    
     const item = await prisma.incomingGearItem.findUnique({
       where: { id: itemId },
       include: {
@@ -30,7 +32,9 @@ export async function GET(
           include: {
             product: {
               include: {
-                accessories: true,
+                accessories: {
+                  orderBy: { accessoryOrder: "asc" }
+                },
                 knownIssues: true,
                 questionTemplates: {
                   orderBy: { questionOrder: "asc" }
@@ -62,9 +66,11 @@ export async function GET(
     })
 
     if (!item) {
+      console.error(`❌ Item not found with ID: ${itemId}`)
       return NextResponse.json({ error: "Item not found" }, { status: 404 })
     }
 
+    console.log(`✅ Item found: ${item.clientName}`)
     return NextResponse.json({ item }, { status: 200 })
   } catch (error: any) {
     console.error("GET /api/inspections/items/[itemId] error:", error)
@@ -105,7 +111,9 @@ export async function POST(
     const product = await prisma.product.findUnique({
       where: { id: productId },
       include: {
-        accessories: true,
+        accessories: {
+          orderBy: { accessoryOrder: "asc" }
+        },
         questionTemplates: {
           orderBy: { questionOrder: "asc" }
         },
@@ -136,8 +144,12 @@ export async function POST(
         include: {
           product: {
             include: {
-              accessories: true,
-              questionTemplates: true,
+              accessories: {
+                orderBy: { accessoryOrder: "asc" }
+              },
+              questionTemplates: {
+                orderBy: { questionOrder: "asc" }
+              },
               knownIssues: true
             }
           }
@@ -170,8 +182,12 @@ export async function POST(
         include: {
           product: {
             include: {
-              accessories: true,
-              questionTemplates: true,
+              accessories: {
+                orderBy: { accessoryOrder: "asc" }
+              },
+              questionTemplates: {
+                orderBy: { questionOrder: "asc" }
+              },
               knownIssues: true
             }
           }

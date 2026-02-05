@@ -6,7 +6,7 @@ import { sendGearReceivedEmail } from "@/lib/email"
 
 /**
  * Mark gear as received (staff only)
- * Sends confirmation email to client
+ * Client will be notified after 10 minutes (unless undone)
  */
 export async function POST(
   request: NextRequest,
@@ -32,26 +32,19 @@ export async function POST(
       return NextResponse.json({ error: "Purchase not found" }, { status: 404 })
     }
 
-    // Check if tracking number exists
+    // Tracking is optional (some clients drop off in person)
+    // Just log if no tracking exists
     if (!purchase.trackingNumber) {
-      return NextResponse.json({ 
-        error: "Cannot mark as received: No tracking information submitted yet" 
-      }, { status: 400 })
+      console.log(`ℹ️  Marking as received without tracking for ${purchase.customerName} (in-person drop-off)`)
     }
 
-    // Check if already marked as received
-    if (purchase.gearReceivedAt) {
-      return NextResponse.json({ 
-        error: "Gear already marked as received" 
-      }, { status: 400 })
-    }
-
-    // Update purchase
+    // Update purchase (allow re-marking if undone)
     const updated = await prisma.pendingPurchase.update({
       where: { id },
       data: {
         gearReceivedAt: new Date(),
         gearReceivedByUserId: session.user.id,
+        clientNotifiedAt: null, // Reset notification status
         status: "INSPECTION_IN_PROGRESS"
       },
       include: {
@@ -82,21 +75,15 @@ export async function POST(
       }
     })
 
-    // Send confirmation email to client
-    if (purchase.customerEmail) {
-      await sendGearReceivedEmail({
-        customerName: purchase.customerName,
-        customerEmail: purchase.customerEmail,
-        itemCount: purchase.items.length
-      })
-    }
-
-    console.log(`✅ Gear marked as received for ${purchase.customerName} by ${session.user.name}`)
+    // Email will be sent after 10 minutes (via separate endpoint)
+    console.log(`✅ Gear marked as received for ${purchase.customerName} by ${session.user.name}. Client will be notified in 10 minutes.`)
 
     return NextResponse.json({
       success: true,
-      message: "Gear marked as received and client notified",
-      purchase: updated
+      message: "Gear marked as received. Client will be notified in 10 minutes.",
+      purchase: updated,
+      canUndo: true,
+      undoExpiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString()
     }, { status: 200 })
 
   } catch (error: any) {

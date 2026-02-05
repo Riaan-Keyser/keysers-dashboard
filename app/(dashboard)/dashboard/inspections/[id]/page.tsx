@@ -12,12 +12,6 @@ import {
   ArrowLeft,
   Edit,
   Save,
-  Play,
-  Eye,
-  RotateCcw,
-  CheckCircle2,
-  XCircle,
-  Clock,
   Package
 } from "lucide-react"
 
@@ -129,60 +123,6 @@ export default function InspectionSessionDetailPage() {
     } catch (error) {
       console.error("Failed to update session:", error)
       alert("Failed to update session")
-    }
-  }
-
-  const getActionButton = (item: IncomingItem) => {
-    switch (item.inspectionStatus) {
-      case "UNVERIFIED":
-        return (
-          <Button
-            size="sm"
-            onClick={() => router.push(`/dashboard/inspections/${sessionId}/items/${item.id}`)}
-          >
-            <Play className="h-4 w-4 mr-2" />
-            Start Verification
-          </Button>
-        )
-      case "IN_PROGRESS":
-      case "VERIFIED":
-        return (
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => router.push(`/dashboard/inspections/${sessionId}/items/${item.id}`)}
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            Continue
-          </Button>
-        )
-      case "APPROVED":
-        return (
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => router.push(`/dashboard/inspections/${sessionId}/items/${item.id}`)}
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              View Details
-            </Button>
-            {/* TODO: Add admin-only reopen button */}
-          </div>
-        )
-      case "REJECTED":
-        return (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => router.push(`/dashboard/inspections/${sessionId}/items/${item.id}`)}
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            View Details
-          </Button>
-        )
-      default:
-        return null
     }
   }
 
@@ -357,7 +297,11 @@ export default function InspectionSessionDetailPage() {
         ) : (
           <div className="space-y-4">
             {session.incomingItems.map((item) => (
-              <Card key={item.id} className="p-6 hover:shadow-md transition-shadow">
+              <Card 
+                key={item.id} 
+                className="p-6 hover:shadow-lg transition-all cursor-pointer hover:border-blue-400"
+                onClick={() => router.push(`/dashboard/inspections/${sessionId}/items/${item.id}`)}
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
@@ -441,9 +385,6 @@ export default function InspectionSessionDetailPage() {
                       )}
                     </div>
                   </div>
-
-                  {/* Action Button */}
-                  <div className="ml-6">{getActionButton(item)}</div>
                 </div>
               </Card>
             ))}

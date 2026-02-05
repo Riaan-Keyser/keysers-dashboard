@@ -285,6 +285,7 @@ model PendingPurchase {
   gearReceivedAt         DateTime? // When staff confirmed gear received
   gearReceivedByUserId   String? // User who marked as received
   gearReceivedBy         User?     @relation("GearReceivedBy", fields: [gearReceivedByUserId], references: [id])
+  clientNotifiedAt       DateTime? // When client was notified (10 min after gearReceivedAt)
 
   // Inspection Integration (Sprint 2)
   inspectionSessionId    String?           @unique
@@ -718,19 +719,21 @@ enum AnswerType {
 
 // Accessory Template - expected accessories for a product
 model AccessoryTemplate {
-  id        String  @id @default(cuid())
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id             String  @id @default(cuid())
+  productId      String
+  product        Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   // Accessory details
-  accessoryName String // e.g., "Battery Charger", "Lens Cap"
-  isRequired    Boolean  @default(false) // Is this accessory expected?
-  penaltyAmount Decimal? @db.Decimal(10, 2) // Optional: deduct from price if missing
+  accessoryName  String // e.g., "Battery Charger", "Lens Cap"
+  accessoryOrder Int     @default(0) // Display order
+  isRequired     Boolean @default(false) // Is this accessory expected?
+  penaltyAmount  Decimal? @db.Decimal(10, 2) // Optional: deduct from price if missing
 
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([productId, accessoryName])
   @@index([productId])
   @@map("accessory_templates")
 }
