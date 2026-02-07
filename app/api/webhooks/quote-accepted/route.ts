@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { generateConfirmationToken, getTokenExpiry } from "@/lib/token"
-import { sendShippingInstructionsEmail } from "@/lib/email"
+import { sendQuoteApprovedEmail } from "@/lib/email"
 
 /**
  * Webhook endpoint for Kapso bot to call when a customer accepts a quote
@@ -108,9 +108,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Quote accepted webhook: Created pending purchase ${pendingPurchase.id} for ${body.customerName} with ${body.items.length} items`)
 
-    // Send shipping instructions email if customer email is available
+    // Send quote approved email with delivery options link
     if (body.customerEmail) {
-      const emailResult = await sendShippingInstructionsEmail({
+      const emailResult = await sendQuoteApprovedEmail({
         customerName: body.customerName,
         customerEmail: body.customerEmail,
         token: trackingToken,
@@ -118,12 +118,12 @@ export async function POST(request: NextRequest) {
       })
 
       if (emailResult.success) {
-        console.log(`✅ Shipping instructions email sent to ${body.customerEmail}`)
+        console.log(`✅ Quote approved email sent to ${body.customerEmail}`)
       } else {
-        console.warn(`⚠️ Failed to send shipping instructions email: ${emailResult.error}`)
+        console.warn(`⚠️ Failed to send quote approved email: ${emailResult.error}`)
       }
     } else {
-      console.log(`ℹ️ No email provided, skipping shipping instructions email`)
+      console.log(`ℹ️ No email provided, skipping quote approved email`)
     }
 
     return NextResponse.json(

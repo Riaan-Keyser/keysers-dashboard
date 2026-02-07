@@ -78,8 +78,8 @@ const acquisitionTypes = [
 ]
 
 const statuses = [
-  { value: "PENDING_INSPECTION", label: "Pending Inspection" },
-  { value: "INSPECTED", label: "Inspected" },
+  { value: "PENDING_INSPECTION", label: "Pending Onboarding" },
+  { value: "INSPECTED", label: "Onboarded" },
   { value: "IN_REPAIR", label: "In Repair" },
   { value: "REPAIR_COMPLETED", label: "Repair Completed" },
   { value: "READY_FOR_SALE", label: "Ready for Sale" },
@@ -274,7 +274,7 @@ export default function InventoryPage() {
   const getStatusColor = (status: string): "default" | "success" | "warning" | "danger" | "info" => {
     const colors: Record<string, "default" | "success" | "warning" | "danger" | "info"> = {
       PENDING_INSPECTION: "warning",
-      INSPECTED: "info",
+      INSPECTED: "success",
       IN_REPAIR: "warning",
       REPAIR_COMPLETED: "info",
       READY_FOR_SALE: "success",
@@ -341,7 +341,7 @@ export default function InventoryPage() {
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-gray-500">Pending Inspection</p>
+          <p className="text-sm text-gray-500">Pending Onboarding</p>
           <p className="text-2xl font-bold text-orange-600">
             {equipment.filter(e => e.status === "PENDING_INSPECTION").length}
           </p>

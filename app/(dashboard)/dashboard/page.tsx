@@ -102,8 +102,8 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3">
                   <Clock className="h-5 w-5 text-orange-500" />
                   <div>
-                    <p className="text-sm font-medium">Pending Inspection</p>
-                    <p className="text-xs text-gray-500">Items need to be inspected</p>
+                    <p className="text-sm font-medium">Pending Onboarding</p>
+                    <p className="text-xs text-gray-500">Items need to be onboarded</p>
                   </div>
                 </div>
                 <span className="text-lg font-bold">{stats?.pendingInspection || 0}</span>

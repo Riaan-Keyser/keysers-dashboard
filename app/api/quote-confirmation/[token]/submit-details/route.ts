@@ -3,6 +3,7 @@ import { validateQuoteToken, invalidateToken } from "@/lib/token"
 import { prisma } from "@/lib/prisma"
 import { validateClientIdentity, validatePhoneNumber, extractDOBFromIdNumber } from "@/lib/validators"
 import { sendAwaitingPaymentEmail } from "@/lib/email"
+import { createEquipmentFromVerifiedItem } from "@/lib/equipment-conversion"
 
 export async function POST(
   request: NextRequest,
@@ -121,6 +122,7 @@ export async function POST(
     console.log("✅ Client details created:", clientDetails.id)
 
     // Handle product selections (Buy vs Consignment)
+    let consignmentEquipmentCreated = 0
     if (body.productSelections) {
       console.log("💾 Saving product selections...")
       const selections = body.productSelections as Record<string, "BUY" | "CONSIGNMENT">
@@ -133,8 +135,35 @@ export async function POST(
             clientSelection: selection // Store whether client chose BUY or CONSIGNMENT
           }
         })
+
+        // Create Equipment immediately for CONSIGNMENT items (go to Uploading Stock)
+        if (selection === "CONSIGNMENT") {
+          const incomingItem = await prisma.incomingGearItem.findUnique({
+            where: { id: itemId },
+            include: {
+              verifiedItem: true,
+            },
+          })
+
+          if (incomingItem?.verifiedItem) {
+            try {
+              await createEquipmentFromVerifiedItem(
+                incomingItem.verifiedItem.id,
+                purchase.inspectionSession?.createdById || "system",
+                null // clientId will be linked in Phase 8
+              )
+              consignmentEquipmentCreated++
+            } catch (error) {
+              console.error(`Failed to create equipment for consignment item ${itemId}:`, error)
+              // Continue with other items
+            }
+          }
+        }
       }
       console.log(`✅ ${Object.keys(selections).length} product selections saved`)
+      if (consignmentEquipmentCreated > 0) {
+        console.log(`📦 Created ${consignmentEquipmentCreated} consignment equipment record(s) in Uploading Stock`)
+      }
     }
 
     // Update purchase status to AWAITING_PAYMENT and mark as accepted

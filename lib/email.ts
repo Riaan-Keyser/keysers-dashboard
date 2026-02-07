@@ -310,7 +310,123 @@ export async function sendQuoteDeclinedEmail({
 }
 
 /**
- * Send shipping instructions email to client (Sprint 1)
+ * Send quote approved email with PDF and delivery options (NEW - Replaces shipping instructions)
+ */
+export async function sendQuoteApprovedEmail({
+  customerName,
+  customerEmail,
+  token,
+  totalAmount
+}: {
+  customerName: string
+  customerEmail: string
+  token: string
+  totalAmount?: any
+}): Promise<EmailResponse> {
+  if (!process.env.RESEND_API_KEY) {
+    console.log("📧 [DEV MODE] Would send quote approved email to:", customerEmail)
+    console.log("   Token:", token.substring(0, 8) + "...")
+    return { success: true }
+  }
+
+  try {
+    const deliveryUrl = `${emailConfig.dashboardUrl}/quote/${token}/delivery`
+    const total = totalAmount ? `R${Number(totalAmount).toLocaleString()}` : "TBC"
+
+    const { data, error } = await resend.emails.send({
+      from: `${emailConfig.companyName} <${emailConfig.from}>`,
+      to: [customerEmail],
+      subject: `Quote Approved - Choose Your Delivery Method | ${emailConfig.companyName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #0066cc; color: white; padding: 30px; text-align: center; }
+              .content { background-color: #f9f9f9; padding: 30px; }
+              .quote-box { background-color: #e8f4f8; padding: 20px; margin: 20px 0; border-left: 4px solid #0066cc; text-align: center; }
+              .cta-button { display: inline-block; padding: 15px 40px; margin: 20px 0; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; text-align: center; font-size: 16px; }
+              .steps { background-color: white; padding: 20px; margin: 20px 0; border-radius: 5px; }
+              .steps ol { padding-left: 20px; }
+              .steps li { margin: 10px 0; }
+              .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🎉 Your Quote Has Been Approved!</h1>
+              </div>
+              
+              <div class="content">
+                <h2>Hi ${customerName},</h2>
+                <p>Great news! We've reviewed your gear and prepared a preliminary quote for you.</p>
+                
+                <div class="quote-box">
+                  <h3 style="margin: 0 0 10px 0; color: #0066cc;">Preliminary Quote Amount</h3>
+                  <p style="font-size: 32px; font-weight: bold; margin: 10px 0; color: #333;">${total}</p>
+                  <p style="font-size: 13px; color: #666; margin: 0;">Final amount confirmed after physical inspection</p>
+                </div>
+                
+                <h3>📦 Next Step: Choose Your Delivery Method</h3>
+                <p>Click the button below to select how you'd like to get your gear to us:</p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${deliveryUrl}" class="cta-button">Choose Delivery Method →</a>
+                </div>
+                
+                <p style="font-size: 13px; color: #666; text-align: center;">
+                  Or copy this link:<br>
+                  <a href="${deliveryUrl}" style="color: #0066cc;">${deliveryUrl}</a>
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                
+                <h3>🚀 What Happens Next?</h3>
+                <div class="steps">
+                  <ol>
+                    <li><strong>Choose delivery method</strong> - Drop off in person or courier to us</li>
+                    <li><strong>We receive your gear</strong> - You'll get an email confirmation</li>
+                    <li><strong>Professional inspection</strong> - We verify condition and accessories</li>
+                    <li><strong>Final quote sent</strong> - Based on actual inspection (usually within 48-72 hours)</li>
+                    <li><strong>You accept & get paid</strong> - Fast, secure payment</li>
+                  </ol>
+                </div>
+                
+                <p style="font-size: 13px; color: #666; margin-top: 30px;">
+                  <strong>Questions?</strong> Just reply to this email or call us at 072 392 6372.
+                </p>
+              </div>
+              
+              <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} ${emailConfig.companyName}. All rights reserved.</p>
+                <p><a href="${emailConfig.companyWebsite}" style="color: #0066cc;">${emailConfig.companyWebsite}</a></p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+    })
+
+    if (error) {
+      console.error("Failed to send quote approved email:", error)
+      return { success: false, error: error.message }
+    }
+
+    console.log("✅ Quote approved email sent:", data?.id)
+    return { success: true, messageId: data?.id }
+
+  } catch (error: any) {
+    console.error("Error sending quote approved email:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Send shipping instructions email to client (Sprint 1) - DEPRECATED
+ * Use sendQuoteApprovedEmail() instead
  */
 export async function sendShippingInstructionsEmail({
   customerName,

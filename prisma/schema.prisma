@@ -43,6 +43,14 @@ model User {
   // Quote confirmation relations
   verifiedClientDetails ClientDetails[] @relation("VerifiedBy")
 
+  // Bundle relations
+  createdBundles  Bundle[] @relation("BundleCreatedBy")
+  approvedBundles Bundle[] @relation("BundleApprovedBy")
+
+  // Consignment change request relations
+  initiatedChangeRequests ConsignmentChangeRequest[] @relation("ChangeRequestInitiatedBy")
+  approvedChangeRequests  ConsignmentChangeRequest[] @relation("ChangeRequestApprovedBy")
+
   @@map("users")
 }
 
@@ -104,8 +112,10 @@ model Equipment {
   lastSyncedAt  DateTime?
 
   // Status
-  status   EquipmentStatus @default(PENDING_INSPECTION)
-  location String? // Physical location in store/warehouse
+  status       EquipmentStatus @default(PENDING_INSPECTION)
+  intakeStatus IntakeStatus?    @default(PENDING_INTAKE) // Uploading Stock workflow
+  location     String? // Physical location in store/warehouse
+  shelfLocation Int? // Shelf number 1-80
 
   // Repair tracking
   inRepair      Boolean     @default(false)
@@ -113,6 +123,19 @@ model Equipment {
 
   // Media
   images String[] // Array of image URLs
+
+  // AI & Advanced Features
+  aiDescription       String? // AI-generated description
+  sourceVerifiedItemId String? // Links back to VerifiedGearItem for traceability
+
+  // Bundling
+  bundleId    String?
+  bundle      Bundle?      @relation(fields: [bundleId], references: [id])
+  bundleItems BundleItem[]
+
+  // Client tracking
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id])
 
   // Metadata
   createdAt       DateTime @default(now())
@@ -123,8 +146,13 @@ model Equipment {
   lastUpdatedBy   User?    @relation("UpdatedBy", fields: [lastUpdatedById], references: [id])
 
   // Relations
-  priceHistory PriceHistory[]
+  priceHistory             PriceHistory[]
+  consignmentChangeRequests ConsignmentChangeRequest[]
 
+  @@index([intakeStatus])
+  @@index([bundleId])
+  @@index([clientId])
+  @@index([shelfLocation])
   @@map("equipment")
 }
 
@@ -166,8 +194,8 @@ enum AcquisitionType {
 }
 
 enum EquipmentStatus {
-  PENDING_INSPECTION // Just received, needs inspection
-  INSPECTED // Inspected, ready for pricing
+  PENDING_INSPECTION // Just received, needs inspection (display as "Pending Onboarding")
+  INSPECTED // Inspected, ready for pricing (display as "Onboarded")
   IN_REPAIR // Sent to technician
   REPAIR_COMPLETED // Back from repair, needs re-inspection
   READY_FOR_SALE // Listed and available
@@ -175,6 +203,11 @@ enum EquipmentStatus {
   SOLD // Sold
   RETURNED_TO_VENDOR // Consignment returned
   RETIRED // No longer selling
+}
+
+enum IntakeStatus {
+  PENDING_INTAKE // Awaiting intake completion in Uploading Stock
+  INTAKE_COMPLETE // Intake completed, ready for inventory
 }
 
 // Price Change History
@@ -330,6 +363,10 @@ model PendingPurchase {
   // Notes
   notes String?
 
+  // Delivery Options
+  deliveryBookingId String?
+  deliveryBooking   DeliveryBooking? @relation(fields: [deliveryBookingId], references: [id])
+
   // Relations
   items         PendingItem[]
   clientDetails ClientDetails? // NEW: One-to-one relation
@@ -344,6 +381,7 @@ model PendingPurchase {
   @@index([whatsappConversationId])
   @@index([invoiceAcceptToken])
   @@index([quoteConfirmationToken])
+  @@index([deliveryBookingId])
   @@map("pending_purchases")
 }
 
@@ -868,3 +906,231 @@ enum OverrideReason {
   RARE_ITEM // Rare/collectible item
   OTHER // Other reason (must provide notes)
 }
+
+// ========================================
+// DELIVERY & LOGISTICS SYSTEM
+// ========================================
+
+// Delivery Booking - client delivery method selection
+model DeliveryBooking {
+  id             String               @id @default(cuid())
+  deliveryMethod DeliveryMethod
+  
+  // Self-deliver booking
+  requestedDate DateTime?
+  requestedTime String? // Time slot like "10:00-12:00"
+  status        DeliveryBookingStatus @default(PENDING)
+  
+  // Courier details
+  trackingNumber String?
+  courierName    String?
+  
+  // Reminder tracking (for courier without tracking)
+  remindersSent     Int       @default(0)
+  lastReminderAt    DateTime?
+  flaggedForFollowUp Boolean   @default(false)
+  
+  // Confirmation
+  confirmedAt      DateTime?
+  confirmedByUserId String?
+  declinedAt       DateTime?
+  declineReason    String?
+  
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  purchases PendingPurchase[]
+  
+  @@index([status])
+  @@index([deliveryMethod])
+  @@index([flaggedForFollowUp])
+  @@map("delivery_bookings")
+}
+
+enum DeliveryMethod {
+  SELF_DELIVER // Client delivers to Keysers
+  COURIER // Client uses courier service
+}
+
+enum DeliveryBookingStatus {
+  PENDING // Awaiting staff confirmation
+  CONFIRMED // Staff confirmed booking
+  DECLINED // Staff declined booking
+  COMPLETED // Delivery completed
+  CANCELLED // Client cancelled
+}
+
+// Calendar Availability - staff working hours
+model CalendarAvailability {
+  id        String   @id @default(cuid())
+  
+  // Recurring availability (day of week)
+  dayOfWeek  Int? // 0=Sunday, 1=Monday, etc. (null for specific dates)
+  startTime  String? // 24-hour format like "09:00"
+  endTime    String? // 24-hour format like "17:00"
+  isAvailable Boolean @default(true)
+  
+  // Specific date blocks (one-off)
+  specificDate DateTime? // For blocking specific dates
+  blockReason  String? // Reason for blocking (e.g., "Public Holiday")
+  
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([dayOfWeek])
+  @@index([specificDate])
+  @@map("calendar_availability")
+}
+
+// ========================================
+// BUNDLING SYSTEM
+// ========================================
+
+// Bundle - groups multiple equipment items as one sellable product
+model Bundle {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  
+  // Pricing
+  sellingPrice Decimal @db.Decimal(10, 2)
+  costPrice    Decimal @db.Decimal(10, 2) // Sum of individual item costs
+  
+  // WooCommerce sync
+  woocommerceId String?
+  syncedToWoo   Boolean @default(false)
+  lastSyncedAt  DateTime?
+  
+  // Status
+  status BundleStatus @default(ACTIVE)
+  
+  // Admin approval
+  createdById       String
+  createdBy         User   @relation("BundleCreatedBy", fields: [createdById], references: [id])
+  adminApprovedById String?
+  adminApprovedBy   User?  @relation("BundleApprovedBy", fields: [adminApprovedById], references: [id])
+  adminApprovedAt   DateTime?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  items     BundleItem[]
+  equipment Equipment[]
+  
+  @@index([status])
+  @@index([createdById])
+  @@map("bundles")
+}
+
+enum BundleStatus {
+  ACTIVE // Bundle is active
+  DISSOLVED // Bundle was dissolved
+}
+
+// Bundle Item - links equipment to bundles
+model BundleItem {
+  id          String    @id @default(cuid())
+  bundleId    String
+  bundle      Bundle    @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  equipmentId String    @unique // Each equipment can only be in one bundle
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  
+  @@index([bundleId])
+  @@map("bundle_items")
+}
+
+// ========================================
+// CONSIGNMENT CHANGE REQUEST SYSTEM
+// ========================================
+
+// Consignment Change Request - admin proposes changes, client confirms
+model ConsignmentChangeRequest {
+  id          String    @id @default(cuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  
+  // Current values
+  currentPayout  Decimal?  @db.Decimal(10, 2)
+  currentEndDate DateTime?
+  
+  // Proposed values
+  proposedPayout  Decimal?  @db.Decimal(10, 2)
+  proposedEndDate DateTime?
+  
+  // Staff initiation
+  initiatedByUserId String
+  initiatedBy       User   @relation("ChangeRequestInitiatedBy", fields: [initiatedByUserId], references: [id])
+  initiatedAt       DateTime @default(now())
+  
+  // Admin approval
+  adminApprovedById String?
+  adminApprovedBy   User?   @relation("ChangeRequestApprovedBy", fields: [adminApprovedById], references: [id])
+  adminApprovedAt   DateTime?
+  
+  // Client confirmation
+  clientConfirmationToken String?   @unique
+  clientConfirmedAt       DateTime?
+  clientAdjustedPayout    Decimal?  @db.Decimal(10, 2) // Client can reduce proposed payout
+  clientAdjustedEndDate   DateTime?
+  
+  // Status
+  status ChangeRequestStatus @default(PENDING_ADMIN)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([equipmentId])
+  @@index([status])
+  @@index([clientConfirmationToken])
+  @@map("consignment_change_requests")
+}
+
+enum ChangeRequestStatus {
+  PENDING_ADMIN // Awaiting admin approval
+  PENDING_CLIENT // Awaiting client confirmation
+  CONFIRMED // Client confirmed changes
+  EXPIRED // Token expired
+  CANCELLED // Cancelled by staff
+}
+
+// ========================================
+// CLIENT MANAGEMENT SYSTEM
+// ========================================
+
+// Client - unified client database (replaces Vendor for client tracking)
+model Client {
+  id        String  @id @default(cuid())
+  firstName String
+  lastName  String
+  phone     String  @unique
+  email     String? @unique
+  
+  // Merge tracking
+  mergedFromVendorId String? // Links to original Vendor if migrated
+  
+  // Relations
+  equipment Equipment[]
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([phone])
+  @@index([email])
+  @@map("clients")
+}
+
+// ========================================
+// USER RELATION UPDATES
+// ========================================
+
+// Add these relations to User model (to be added separately)

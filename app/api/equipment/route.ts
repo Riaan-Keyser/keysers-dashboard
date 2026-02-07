@@ -13,10 +13,12 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const status = searchParams.get("status")
     const acquisitionType = searchParams.get("acquisitionType")
+    const intakeStatus = searchParams.get("intakeStatus")
 
     const where: any = {}
     if (status) where.status = status
     if (acquisitionType) where.acquisitionType = acquisitionType
+    if (intakeStatus) where.intakeStatus = intakeStatus
 
     const equipment = await prisma.equipment.findMany({
       where,

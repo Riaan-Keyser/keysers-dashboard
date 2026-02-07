@@ -71,20 +71,32 @@ interface PendingPurchase {
 }
 
 const formatPhoneNumber = (phone: string): string => {
+  if (!phone) return phone
+  
   // Remove all non-digit characters except +
   const cleaned = phone.replace(/[^\d+]/g, '')
   
-  // Check if it's a South African number
-  if (cleaned.startsWith('+27') || cleaned.startsWith('27')) {
-    const number = cleaned.startsWith('+') ? cleaned.slice(3) : cleaned.slice(2)
-    
-    // Format as +27 XX XXX XXXX
+  // Format +27XXXXXXXXX as +27 XX XXX XXXX
+  if (cleaned.startsWith('+27')) {
+    const number = cleaned.substring(3)
     if (number.length === 9) {
       return `+27 ${number.slice(0, 2)} ${number.slice(2, 5)} ${number.slice(5)}`
     }
+    // Return with +27 prefix even if not exactly 9 digits
+    return `+27 ${number}`
   }
   
-  // Return original if not matching expected format
+  // Format 0XXXXXXXXX as 0XX XXX XXXX
+  if (cleaned.startsWith('0')) {
+    const number = cleaned.substring(1)
+    if (number.length === 9) {
+      return `0${number.slice(0, 2)} ${number.slice(2, 5)} ${number.slice(5)}`
+    }
+    // Return with 0 prefix even if not exactly 9 digits
+    return `0${number}`
+  }
+  
+  // Return original if format not recognized
   return phone
 }
 
@@ -98,15 +110,22 @@ const formatPrice = (price: number | null): string => {
   return `R${formatted}`
 }
 
+const validateEmail = (email: string): boolean => {
+  if (!email) return true // Email is optional
+  
+  // Basic email validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
 export default function IncomingGearPage() {
   const [purchases, setPurchases] = useState<PendingPurchase[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(() => {
-    // Restore expanded state from sessionStorage
+    // Restore expanded state from sessionStorage (persists across navigation)
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('incomingGear_expandedPurchase')
       if (saved) {
-        sessionStorage.removeItem('incomingGear_expandedPurchase') // Clear after reading
         return new Set([saved])
       }
     }
@@ -162,6 +181,22 @@ export default function IncomingGearPage() {
     type: "info"
   })
 
+  // Walk-in Client Modal
+  const [showWalkInModal, setShowWalkInModal] = useState(false)
+  const [walkInData, setWalkInData] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: ""
+  })
+  const [creatingWalkIn, setCreatingWalkIn] = useState(false)
+  const [walkInErrors, setWalkInErrors] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: ""
+  })
+
   // Undo confirmation modal
   const [showUndoModal, setShowUndoModal] = useState(false)
   const [undoTarget, setUndoTarget] = useState<{
@@ -184,6 +219,9 @@ export default function IncomingGearPage() {
     type: 'purchase' | 'product'
   } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  
+  // Add product loading state
+  const [addingProduct, setAddingProduct] = useState<string | null>(null)
 
   useEffect(() => {
     fetchPurchases()
@@ -197,6 +235,27 @@ export default function IncomingGearPage() {
 
     return () => clearInterval(interval)
   }, [statusFilter])
+
+  // Refresh when navigating back to this page
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchPurchases(true) // Silent refresh when page becomes visible
+      }
+    }
+
+    const handleFocus = () => {
+      fetchPurchases(true) // Silent refresh when window gains focus
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [])
 
   // Update current time every second for countdown timer
   useEffect(() => {
@@ -365,6 +424,8 @@ export default function IncomingGearPage() {
         setShowDeleteModal(false)
         setDeleteTarget(null)
         fetchPurchases()
+        // Trigger immediate notification count refresh in sidebar
+        window.dispatchEvent(new Event('refreshNotificationCounts'))
       } else {
         const errorText = await response.text()
         console.error(`Failed to delete ${deleteTarget.type}:`, {
@@ -390,7 +451,10 @@ export default function IncomingGearPage() {
     setDeleteTarget(null)
   }
 
-  const handleAddProduct = async (sessionId: string) => {
+  const handleAddProduct = async (sessionId: string, purchaseId: string) => {
+    if (addingProduct) return // Prevent double-clicks
+    
+    setAddingProduct(sessionId)
     try {
       const response = await fetch(`/api/incoming-gear/sessions/${sessionId}/add-item`, {
         method: "POST",
@@ -405,6 +469,8 @@ export default function IncomingGearPage() {
 
       if (response.ok) {
         const newItem = await response.json()
+        // Save expanded state before navigating
+        sessionStorage.setItem('incomingGear_expandedPurchase', purchaseId)
         // Navigate to verify page for the new item (with ?new=true to prevent auto-search)
         window.location.href = `/dashboard/inspections/${sessionId}/items/${newItem.id}?new=true`
       } else {
@@ -414,6 +480,7 @@ export default function IncomingGearPage() {
           message: data.error || "Failed to add product",
           type: "error"
         })
+        setAddingProduct(null)
       }
     } catch (error) {
       console.error("Failed to add product:", error)
@@ -422,6 +489,7 @@ export default function IncomingGearPage() {
         message: "Failed to add product. Please try again.",
         type: "error"
       })
+      setAddingProduct(null)
     }
   }
 
@@ -513,6 +581,8 @@ export default function IncomingGearPage() {
       if (response.ok) {
         // Success - just refresh the list without showing alert
         fetchPurchases()
+        // Trigger immediate notification count refresh in sidebar
+        window.dispatchEvent(new Event('refreshNotificationCounts'))
       } else {
         // Only show error alerts
         const data = await response.json()
@@ -553,6 +623,8 @@ export default function IncomingGearPage() {
       if (response.ok) {
         // Success - just refresh the list without showing alert
         fetchPurchases()
+        // Trigger immediate notification count refresh in sidebar
+        window.dispatchEvent(new Event('refreshNotificationCounts'))
       } else {
         // Only show error alerts
         const data = await response.json()
@@ -663,6 +735,8 @@ export default function IncomingGearPage() {
           type: "success"
         })
         fetchPurchases()
+        // Trigger immediate notification count refresh in sidebar
+        window.dispatchEvent(new Event('refreshNotificationCounts'))
       } else {
         setAlertModal({
           isOpen: true,
@@ -737,6 +811,83 @@ export default function IncomingGearPage() {
     return status === "VERIFIED"
   }
 
+  const handleCreateWalkIn = async () => {
+    // Reset errors
+    const errors = {
+      firstName: "",
+      lastName: "",
+      phone: "",
+      email: ""
+    }
+
+    // Validate all fields
+    let hasError = false
+
+    if (!walkInData.firstName) {
+      errors.firstName = "First name is required"
+      hasError = true
+    }
+
+    if (!walkInData.lastName) {
+      errors.lastName = "Last name is required"
+      hasError = true
+    }
+
+    if (!walkInData.phone) {
+      errors.phone = "Phone number is required"
+      hasError = true
+    }
+
+    if (walkInData.email && !validateEmail(walkInData.email)) {
+      errors.email = "Please enter a valid email address"
+      hasError = true
+    }
+
+    setWalkInErrors(errors)
+
+    if (hasError) {
+      return
+    }
+
+    setCreatingWalkIn(true)
+    try {
+      const response = await fetch("/api/incoming-gear/create-walkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(walkInData)
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create walk-in client")
+      }
+
+      const result = await response.json()
+      
+      setShowWalkInModal(false)
+      setWalkInData({ firstName: "", lastName: "", phone: "", email: "" })
+      setWalkInErrors({ firstName: "", lastName: "", phone: "", email: "" })
+
+      // Refresh the list to show the new purchase
+      await fetchPurchases(true)
+      
+      // Expand the newly created purchase and save to sessionStorage
+      setExpandedPurchases(new Set([result.purchaseId]))
+      sessionStorage.setItem('incomingGear_expandedPurchase', result.purchaseId)
+      
+      // Trigger immediate notification count refresh in sidebar
+      window.dispatchEvent(new Event('refreshNotificationCounts'))
+    } catch (error) {
+      console.error("Failed to create walk-in client:", error)
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to create walk-in client. Please try again.",
+        type: "error"
+      })
+    } finally {
+      setCreatingWalkIn(false)
+    }
+  }
+
   const pendingCount = purchases.filter(p => p.status === "PENDING_REVIEW").length
   const approvedCount = purchases.filter(p => p.status === "APPROVED").length
 
@@ -770,6 +921,20 @@ export default function IncomingGearPage() {
               </span>
             </div>
           )}
+          
+          {/* New Walk-in Client button */}
+          <Button
+            onClick={() => {
+              setShowWalkInModal(true)
+              setWalkInErrors({ firstName: "", lastName: "", phone: "", email: "" })
+            }}
+            variant="default"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <PackagePlus className="h-4 w-4" />
+            New Walk-in Client
+          </Button>
           
           {/* Manual refresh button */}
           <Button
@@ -1025,52 +1190,56 @@ export default function IncomingGearPage() {
                     )}
 
                     {/* Products Preview (Before Received) - Same layout as inspection, but non-interactive */}
-                    {!purchase.gearReceivedAt && purchase.items && purchase.items.length > 0 && (
+                    {!purchase.gearReceivedAt && (
                       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4 mb-4">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <ClipboardCheck className="h-6 w-6 text-gray-400" />
                             <div>
-                              <p className="font-semibold text-gray-900">Inspection Has Not Started</p>
+                              <p className="font-semibold text-gray-900">Ready for Inspection</p>
                               <p className="text-xs text-gray-600">
-                                Click "Received" to begin inspection
+                                Gear received. Click to start verifying items.
                               </p>
                             </div>
                           </div>
                         </div>
 
-                        {/* Progress - static 0% */}
-                        <div className="mb-4">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium text-gray-700">
-                              Progress: 0/{purchase.items.length} items inspected
-                            </span>
-                            <span className="text-sm font-semibold text-gray-400">0%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className="h-2 rounded-full bg-gray-300" style={{ width: '0%' }} />
-                          </div>
-                        </div>
-
-                        {/* Product Cards - Same layout, non-interactive */}
-                        <div className="space-y-3 mb-4">
-                          {purchase.items.map((item) => (
-                            <div
-                              key={item.id}
-                              className="bg-white border-2 border-gray-200 rounded-lg p-4"
-                            >
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="flex-1">
-                                  <h4 className="font-semibold text-gray-900 mb-2">{item.name}</h4>
-                                  <p className="text-sm text-gray-500">Awaiting gear receipt</p>
-                                </div>
-                                <div className="flex items-center justify-center min-w-[100px]">
-                                  <Badge variant="default">UNVERIFIED</Badge>
-                                </div>
+                        {purchase.items && purchase.items.length > 0 && (
+                          <>
+                            {/* Progress - static 0% */}
+                            <div className="mb-4">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-sm font-medium text-gray-700">
+                                  Progress: 0/{purchase.items.length} items inspected
+                                </span>
+                                <span className="text-sm font-semibold text-gray-400">0%</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div className="h-2 rounded-full bg-gray-300" style={{ width: '0%' }} />
                               </div>
                             </div>
-                          ))}
-                        </div>
+
+                            {/* Product Cards - Same layout, non-interactive */}
+                            <div className="space-y-3 mb-4">
+                              {purchase.items.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="bg-white border-2 border-gray-200 rounded-lg p-4"
+                                >
+                                  <div className="flex items-center justify-between gap-4">
+                                    <div className="flex-1">
+                                      <h4 className="font-semibold text-gray-900 mb-2">{item.name}</h4>
+                                      <p className="text-sm text-gray-500">Awaiting gear receipt</p>
+                                    </div>
+                                    <div className="flex items-center justify-center min-w-[100px]">
+                                      <Badge variant="default">UNVERIFIED</Badge>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -1136,7 +1305,7 @@ export default function IncomingGearPage() {
                                     item => item.inspectionStatus === "VERIFIED"
                                   ).length
                                   const totalCount = purchase.inspectionSession.incomingItems.length
-                                  const percentage = Math.round((verifiedCount / totalCount) * 100)
+                                  const percentage = totalCount > 0 ? Math.round((verifiedCount / totalCount) * 100) : 0
                                   const allVerified = verifiedCount === totalCount && totalCount > 0
 
                                   return (
@@ -1226,50 +1395,64 @@ export default function IncomingGearPage() {
                                     </div>
                                   )
                                 })}
-                                
-                                {/* Add Products Button */}
-                                <button
-                                  onClick={() => handleAddProduct(purchase.inspectionSessionId!)}
-                                  className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg py-6 px-4 hover:border-blue-400 hover:bg-blue-50 transition-all text-gray-600 hover:text-blue-600 flex items-center justify-center gap-2"
-                                >
-                                  <PackagePlus className="h-5 w-5" />
-                                  <span className="font-medium">Add Products</span>
-                                </button>
-                                
-                                {/* Confirm Button - Send Final Quote */}
-                                {(() => {
-                                  // Check if all items are approved
-                                  const allApproved = purchase.inspectionSession!.incomingItems.every(
-                                    item => item.verifiedItem?.approvedAt
-                                  )
-                                  const hasItems = purchase.inspectionSession!.incomingItems.length > 0
-                                  const alreadySent = purchase.finalQuoteSentAt
-                                  
-                                  if (hasItems && allApproved && !alreadySent) {
-                                    return (
-                                      <button
-                                        onClick={() => handleSendFinalQuote(purchase.id, purchase.customerName, purchase.customerEmail!)}
-                                        disabled={sendingFinalQuote === purchase.id || !purchase.customerEmail}
-                                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg py-4 px-4 transition-all flex items-center justify-center gap-2"
-                                      >
-                                        {sendingFinalQuote === purchase.id ? (
-                                          <>
-                                            <Loader2 className="h-5 w-5 animate-spin" />
-                                            <span>Sending Final Quote...</span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <Send className="h-5 w-5" />
-                                            <span>Confirm - Send Final Quote to Client</span>
-                                          </>
-                                        )}
-                                      </button>
-                                    )
-                                  }
-                                  return null
-                                })()}
                               </div>
                             )}
+                            
+                            {/* Add Products Button - Always show when inspection exists */}
+                            {purchase.inspectionSession && (
+                              <div className="mb-4">
+                                <button
+                                  onClick={() => handleAddProduct(purchase.inspectionSessionId!, purchase.id)}
+                                  disabled={addingProduct === purchase.inspectionSessionId}
+                                  className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg py-6 px-4 hover:border-blue-400 hover:bg-blue-50 transition-all text-gray-600 hover:text-blue-600 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {addingProduct === purchase.inspectionSessionId ? (
+                                    <>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
+                                      <span className="font-medium">Adding Product...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <PackagePlus className="h-5 w-5" />
+                                      <span className="font-medium">Add Products</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                            
+                            {/* Confirm Button - Send Final Quote */}
+                            {purchase.inspectionSession && (() => {
+                              // Check if all items are approved
+                              const allApproved = purchase.inspectionSession!.incomingItems.every(
+                                item => item.verifiedItem?.approvedAt
+                              )
+                              const hasItems = purchase.inspectionSession!.incomingItems.length > 0
+                              const alreadySent = purchase.finalQuoteSentAt
+                              
+                              if (hasItems && allApproved && !alreadySent) {
+                                return (
+                                  <button
+                                    onClick={() => handleSendFinalQuote(purchase.id, purchase.customerName, purchase.customerEmail!)}
+                                    disabled={sendingFinalQuote === purchase.id || !purchase.customerEmail}
+                                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg py-4 px-4 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    {sendingFinalQuote === purchase.id ? (
+                                      <>
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        <span>Sending Final Quote...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Send className="h-5 w-5" />
+                                        <span>Confirm - Send Final Quote to Client</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )
+                              }
+                              return null
+                            })()}
                           </>
                         )}
                       </div>
@@ -1636,6 +1819,112 @@ export default function IncomingGearPage() {
           </div>
         </div>
       )}
+
+      {/* Walk-in Client Modal */}
+      <Modal 
+        isOpen={showWalkInModal} 
+        onClose={() => {
+          setShowWalkInModal(false)
+          setWalkInErrors({ firstName: "", lastName: "", phone: "", email: "" })
+        }}
+        title="New Walk-in Client"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Create a new walk-in client to start the inspection process immediately. No email or delivery steps required.
+          </p>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="walkInFirstName">First Name *</Label>
+              <Input
+                id="walkInFirstName"
+                value={walkInData.firstName}
+                onChange={(e) => {
+                  setWalkInData({ ...walkInData, firstName: e.target.value })
+                  setWalkInErrors({ ...walkInErrors, firstName: "" })
+                }}
+                placeholder="John"
+                className={walkInErrors.firstName ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
+              />
+              {walkInErrors.firstName && (
+                <p className="text-xs text-red-600 mt-1">{walkInErrors.firstName}</p>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="walkInLastName">Last Name *</Label>
+              <Input
+                id="walkInLastName"
+                value={walkInData.lastName}
+                onChange={(e) => {
+                  setWalkInData({ ...walkInData, lastName: e.target.value })
+                  setWalkInErrors({ ...walkInErrors, lastName: "" })
+                }}
+                placeholder="Doe"
+                className={walkInErrors.lastName ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
+              />
+              {walkInErrors.lastName && (
+                <p className="text-xs text-red-600 mt-1">{walkInErrors.lastName}</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="walkInPhone">Phone Number *</Label>
+            <Input
+              id="walkInPhone"
+              value={walkInData.phone}
+              onChange={(e) => {
+                setWalkInData({ ...walkInData, phone: e.target.value })
+                setWalkInErrors({ ...walkInErrors, phone: "" })
+              }}
+              placeholder="e.g. 072 123 4567 or +27 72 123 4567"
+              className={walkInErrors.phone ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
+            />
+            {walkInErrors.phone && (
+              <p className="text-xs text-red-600 mt-1">{walkInErrors.phone}</p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="walkInEmail">Email (Optional)</Label>
+            <Input
+              id="walkInEmail"
+              type="email"
+              value={walkInData.email}
+              onChange={(e) => {
+                setWalkInData({ ...walkInData, email: e.target.value })
+                setWalkInErrors({ ...walkInErrors, email: "" })
+              }}
+              placeholder="john@example.com"
+              className={walkInErrors.email ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
+            />
+            {walkInErrors.email && (
+              <p className="text-xs text-red-600 mt-1">{walkInErrors.email}</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowWalkInModal(false)
+                setWalkInErrors({ firstName: "", lastName: "", phone: "", email: "" })
+              }}
+              disabled={creatingWalkIn}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateWalkIn}
+              disabled={creatingWalkIn || !walkInData.firstName || !walkInData.lastName || !walkInData.phone}
+            >
+              {creatingWalkIn ? "Creating..." : "Create & Start Inspection"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Alert Modal */}
       <AlertModal

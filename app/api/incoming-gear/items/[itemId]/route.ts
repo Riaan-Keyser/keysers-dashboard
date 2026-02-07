@@ -34,28 +34,8 @@ export async function DELETE(
         where: { id: itemId }
       })
 
-      // Check if this was the last item in the inspection session
-      const remainingItems = await prisma.incomingGearItem.count({
-        where: { sessionId: incomingItem.sessionId }
-      })
-
-      // If no items left, delete the inspection session and update purchase status
-      if (remainingItems === 0 && incomingItem.session) {
-        await prisma.inspectionSession.delete({
-          where: { id: incomingItem.sessionId }
-        })
-
-        // Update purchase status back to PENDING_REVIEW
-        if (incomingItem.session.pendingPurchase) {
-          await prisma.pendingPurchase.update({
-            where: { id: incomingItem.session.pendingPurchase.id },
-            data: {
-              status: "PENDING_REVIEW",
-              inspectionSessionId: null
-            }
-          })
-        }
-      }
+      // Keep the inspection session active even if all items are removed
+      // This allows users to add more products without restarting the inspection
 
       // Log activity
       await prisma.activityLog.create({

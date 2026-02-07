@@ -50,6 +50,19 @@ export async function POST(
       }, { status: 400 })
     }
 
+    // If an inspection session exists, delete it and all its items
+    if (purchase.inspectionSessionId) {
+      // Delete all incoming gear items first (they cascade delete verified items)
+      await prisma.incomingGearItem.deleteMany({
+        where: { sessionId: purchase.inspectionSessionId }
+      })
+      
+      // Delete the inspection session
+      await prisma.inspectionSession.delete({
+        where: { id: purchase.inspectionSessionId }
+      })
+    }
+
     // Undo the received status
     const updated = await prisma.pendingPurchase.update({
       where: { id },
@@ -57,6 +70,7 @@ export async function POST(
         gearReceivedAt: null,
         gearReceivedByUserId: null,
         clientNotifiedAt: null,
+        inspectionSessionId: null,
         status: "AWAITING_DELIVERY"
       }
     })

@@ -15,7 +15,9 @@ import {
   BarChart3,
   MessageCircle,
   PackagePlus,
-  CreditCard
+  CreditCard,
+  Calendar,
+  Upload
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 
@@ -27,13 +29,15 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
   { name: "Incoming Gear", href: "/dashboard/incoming", icon: PackagePlus },
   { name: "Awaiting Payment", href: "/dashboard/awaiting-payment", icon: CreditCard },
+  { name: "Uploading Stock", href: "/dashboard/uploading-stock", icon: Upload },
   { name: "Inventory", href: "/dashboard/inventory", icon: Package },
-  { name: "Vendors/Clients", href: "/dashboard/vendors", icon: Users },
+  { name: "Consignment", href: "/dashboard/consignment", icon: ShoppingCart },
+  { name: "Clients", href: "/dashboard/vendors", icon: Users },
   { name: "Repairs", href: "/dashboard/repairs", icon: Wrench },
   { name: "Pricing", href: "/dashboard/pricing", icon: DollarSign },
-  { name: "Consignment", href: "/dashboard/consignment", icon: ShoppingCart },
   { name: "WhatsApp Messages", href: "/dashboard/whatsapp", icon: MessageCircle },
   { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
@@ -41,62 +45,44 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [incomingGearCount, setIncomingGearCount] = useState(0)
-  const [awaitingPaymentCount, setAwaitingPaymentCount] = useState(0)
-  const [repairsRequiredCount, setRepairsRequiredCount] = useState(0)
+  const [notificationCounts, setNotificationCounts] = useState({
+    calendar: 0,
+    incomingGear: 0,
+    awaitingPayment: 0,
+    uploadingStock: 0,
+    inventory: 0,
+    consignment: 0,
+    repairs: 0,
+  })
 
   useEffect(() => {
-    // Fetch incoming gear count (inspection in progress)
-    const fetchIncomingGearCount = async () => {
+    const fetchNotificationCounts = async () => {
       try {
-        const response = await fetch("/api/incoming-gear?status=INSPECTION_IN_PROGRESS")
+        const response = await fetch("/api/notifications/counts")
         if (response.ok) {
-          const data = await response.json()
-          setIncomingGearCount(data.length || 0)
+          const counts = await response.json()
+          setNotificationCounts(counts)
         }
       } catch (error) {
-        console.error("Failed to fetch incoming gear count:", error)
+        console.error("Failed to fetch notification counts:", error)
       }
     }
 
-    // Fetch awaiting payment count
-    const fetchAwaitingPaymentCount = async () => {
-      try {
-        const response = await fetch("/api/incoming-gear?status=AWAITING_PAYMENT")
-        if (response.ok) {
-          const data = await response.json()
-          setAwaitingPaymentCount(data.length || 0)
-        }
-      } catch (error) {
-        console.error("Failed to fetch awaiting payment count:", error)
-      }
-    }
-
-    // Fetch repairs required count
-    const fetchRepairsRequiredCount = async () => {
-      try {
-        const response = await fetch("/api/repairs")
-        if (response.ok) {
-          const data = await response.json()
-          const count = data.itemsRequiringRepair?.length || 0
-          setRepairsRequiredCount(count)
-        }
-      } catch (error) {
-        console.error("Failed to fetch repairs required count:", error)
-      }
-    }
-
-    fetchIncomingGearCount()
-    fetchAwaitingPaymentCount()
-    fetchRepairsRequiredCount()
+    fetchNotificationCounts()
 
     // Refresh counts every 30 seconds
-    const interval = setInterval(() => {
-      fetchIncomingGearCount()
-      fetchAwaitingPaymentCount()
-      fetchRepairsRequiredCount()
-    }, 30000)
-    return () => clearInterval(interval)
+    const interval = setInterval(fetchNotificationCounts, 30000)
+    
+    // Listen for manual refresh requests from other components
+    const handleRefreshCounts = () => {
+      fetchNotificationCounts()
+    }
+    window.addEventListener('refreshNotificationCounts', handleRefreshCounts)
+    
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('refreshNotificationCounts', handleRefreshCounts)
+    }
   }, [])
 
   return (
@@ -108,9 +94,18 @@ export function Sidebar() {
         {navItems.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon
-          const showIncomingGearBadge = item.href === "/dashboard/incoming" && incomingGearCount > 0
-          const showAwaitingPaymentBadge = item.href === "/dashboard/awaiting-payment" && awaitingPaymentCount > 0
-          const showRepairsBadge = item.href === "/dashboard/repairs" && repairsRequiredCount > 0
+          
+          // Determine badge count for this nav item
+          let badgeCount = 0
+          if (item.href === "/dashboard/calendar") badgeCount = notificationCounts.calendar
+          else if (item.href === "/dashboard/incoming") badgeCount = notificationCounts.incomingGear
+          else if (item.href === "/dashboard/awaiting-payment") badgeCount = notificationCounts.awaitingPayment
+          else if (item.href === "/dashboard/uploading-stock") badgeCount = notificationCounts.uploadingStock
+          else if (item.href === "/dashboard/inventory") badgeCount = notificationCounts.inventory
+          else if (item.href === "/dashboard/consignment") badgeCount = notificationCounts.consignment
+          else if (item.href === "/dashboard/repairs") badgeCount = notificationCounts.repairs
+          
+          const showBadge = badgeCount > 0
           
           return (
             <Link
@@ -124,19 +119,9 @@ export function Sidebar() {
             >
               <Icon className="h-5 w-5" />
               {item.name}
-              {showIncomingGearBadge && (
+              {showBadge && (
                 <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {incomingGearCount}
-                </span>
-              )}
-              {showAwaitingPaymentBadge && (
-                <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {awaitingPaymentCount}
-                </span>
-              )}
-              {showRepairsBadge && (
-                <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {repairsRequiredCount}
+                  {badgeCount}
                 </span>
               )}
             </Link>

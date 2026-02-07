@@ -70,7 +70,7 @@ export default function EquipmentPage() {
       case "RETIRED":
         return "secondary"
       case "INSPECTED":
-        return "default"
+        return "success"
       default:
         return "default"
     }
@@ -94,7 +94,18 @@ export default function EquipmentPage() {
   }
 
   const formatStatus = (status: string) => {
-    return status.replace(/_/g, " ")
+    const statusLabels: Record<string, string> = {
+      PENDING_INSPECTION: "Pending Onboarding",
+      INSPECTED: "Onboarded",
+      IN_REPAIR: "In Repair",
+      REPAIR_COMPLETED: "Repair Completed",
+      READY_FOR_SALE: "Ready for Sale",
+      RESERVED: "Reserved",
+      SOLD: "Sold",
+      RETURNED_TO_VENDOR: "Returned to Vendor",
+      RETIRED: "Retired"
+    }
+    return statusLabels[status] || status.replace(/_/g, " ")
   }
 
   return (

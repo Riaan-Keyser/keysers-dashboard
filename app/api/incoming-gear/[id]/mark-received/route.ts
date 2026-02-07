@@ -58,28 +58,32 @@ export async function POST(
       }
     })
 
-    // Auto-create inspection session if items exist and no session yet
+    // Auto-create inspection session if no session exists yet
     let inspectionSessionId = purchase.inspectionSessionId as string | null
-    if (!inspectionSessionId && purchase.items.length > 0) {
+    if (!inspectionSessionId) {
+      const hasItems = purchase.items.length > 0
       const inspectionSession = await prisma.inspectionSession.create({
         data: {
-          sessionName: `Quote from ${purchase.customerName} - ${new Date().toLocaleDateString()}`,
+          sessionName: `${hasItems ? 'Quote from' : 'Walk-in:'} ${purchase.customerName} - ${new Date().toLocaleDateString()}`,
           shipmentReference: purchase.trackingNumber || undefined,
           vendorId: purchase.vendorId || undefined,
           status: "IN_PROGRESS",
           notes: `Customer Phone: ${purchase.customerPhone}\nCustomer Email: ${purchase.customerEmail || 'Not provided'}\nTracking: ${purchase.trackingNumber || 'Not provided'}`,
           createdById: session.user.id,
-          incomingItems: {
-            create: purchase.items.map((item: any) => ({
-              clientName: item.name,
-              clientBrand: item.brand,
-              clientModel: item.model,
-              clientCondition: item.condition,
-              clientDescription: item.description,
-              clientImages: item.imageUrls || [],
-              inspectionStatus: "UNVERIFIED"
-            }))
-          }
+          // Only pre-populate items if there are PendingItems from bot
+          ...(hasItems ? {
+            incomingItems: {
+              create: purchase.items.map((item: any) => ({
+                clientName: item.name,
+                clientBrand: item.brand,
+                clientModel: item.model,
+                clientCondition: item.condition,
+                clientDescription: item.description,
+                clientImages: item.imageUrls || [],
+                inspectionStatus: "UNVERIFIED"
+              }))
+            }
+          } : {})
         },
         include: {
           incomingItems: true
