@@ -1,12 +1,18 @@
 import { Pool } from 'pg'
 
 // Connection to the existing keysers_inventory database
+// Validate that credentials are configured
+if (!process.env.INVENTORY_DB_PASSWORD && !process.env.DB_PASSWORD) {
+  console.warn('⚠️  INVENTORY_DB_PASSWORD not configured. Database Management will not work.')
+  console.warn('   Please set INVENTORY_DB_PASSWORD in your .env file.')
+}
+
 const pool = new Pool({
   host: process.env.INVENTORY_DB_HOST || 'localhost',
   port: parseInt(process.env.INVENTORY_DB_PORT || '5432'),
   database: process.env.INVENTORY_DB_NAME || 'keysers_inventory',
   user: process.env.INVENTORY_DB_USER || 'keysers',
-  password: process.env.INVENTORY_DB_PASSWORD || process.env.DB_PASSWORD || ''
+  password: process.env.INVENTORY_DB_PASSWORD || process.env.DB_PASSWORD || undefined
 })
 
 export async function query(text: string, params?: any[]) {

@@ -11,6 +11,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized - Admin only" }, { status: 401 })
     }
 
+    // Check if inventory DB credentials are configured
+    if (!process.env.INVENTORY_DB_PASSWORD && !process.env.DB_PASSWORD) {
+      return NextResponse.json({ 
+        error: "Inventory database credentials not configured. Please set INVENTORY_DB_PASSWORD in your .env file." 
+      }, { status: 503 })
+    }
+
     const searchParams = request.nextUrl.searchParams
     const action = searchParams.get("action")
     const table = searchParams.get("table")
@@ -36,6 +43,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error: any) {
     console.error("GET /api/admin/inventory-db error:", error)
+    
+    // Provide helpful error messages for common issues
+    if (error.message?.includes('SASL') || error.message?.includes('password')) {
+      return NextResponse.json({ 
+        error: "Database authentication failed. Please check INVENTORY_DB_PASSWORD in your .env file." 
+      }, { status: 500 })
+    }
+    
+    if (error.message?.includes('ECONNREFUSED')) {
+      return NextResponse.json({ 
+        error: "Cannot connect to inventory database. Please ensure PostgreSQL is running and INVENTORY_DB_HOST/PORT are correct." 
+      }, { status: 500 })
+    }
+    
     return NextResponse.json({ error: error.message || "Database error" }, { status: 500 })
   }
 }
