@@ -1,0 +1,443 @@
+{
+  "table": "equipment_inventory",
+  "totalRows": "1271",
+  "lensCount": "525",
+  "schema": [
+    {
+      "column_name": "id",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "nextval('equipment_inventory_id_seq'::regclass)"
+    },
+    {
+      "column_name": "make",
+      "data_type": "character varying",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "model",
+      "data_type": "character varying",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "product_type",
+      "data_type": "character varying",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "specifications",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "column_name": "ai_matching",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "column_name": "pricing",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "column_name": "search_vector",
+      "data_type": "tsvector",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true"
+    },
+    {
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "column_name": "full_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "ocr",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "exact_model",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "output_text",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "focal_length",
+      "data_type": "character varying",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "aperture",
+      "data_type": "character varying",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "mount",
+      "data_type": "character varying",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "price_low",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "price_high",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "consignment_price_low",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "consignment_price_high",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    }
+  ],
+  "specsKeys": [
+    "aperture",
+    "capacity",
+    "card_type",
+    "chip",
+    "color",
+    "focal_length",
+    "is_L_series",
+    "length",
+    "lens_type",
+    "mount",
+    "quantity",
+    "size",
+    "storage",
+    "type"
+  ],
+  "aiMatchingTypes": [
+    {
+      "type": "object",
+      "count": "1271"
+    }
+  ],
+  "sampleRows": [
+    {
+      "id": 1,
+      "make": "Nikon",
+      "model": "AF 20mm f/2.8D",
+      "product_type": "Lens",
+      "specifications": {
+        "mount": "Nikon F Mount",
+        "aperture": "f2.8",
+        "lens_type": "Wide Angle Prime",
+        "focal_length": "20mm"
+      },
+      "ai_matching": {
+        "aliases": [
+          "20mm 2.8",
+          "Nikkor 20mm",
+          "AF 20mm"
+        ],
+        "keywords": [
+          "wide angle",
+          "prime",
+          "landscape"
+        ],
+        "vision_ocr": "AF NIKKOR 20mm 1:2.8",
+        "display_text": "Nikon AF 20mm f2.8 Lens"
+      },
+      "pricing": {
+        "low": 1850,
+        "high": 2250,
+        "currency": "ZAR",
+        "consignment": 2450
+      },
+      "search_vector": "'1':9A '2.8':10A '20mm':3A,8A,13B,16C 'af':2A,6A,12B 'f':19C 'f/2.8d':4A 'f2.8':14B,17C 'len':5B,15B 'mount':20C 'nikkor':7A 'nikon':1A,11B,18C",
+      "is_active": true,
+      "notes": null,
+      "created_at": "2025-12-08T09:46:09.682Z",
+      "updated_at": "2026-01-15T13:07:33.724Z",
+      "full_name": null,
+      "ocr": null,
+      "exact_model": null,
+      "output_text": "Nikon AF 20mm f/2.8D Lens",
+      "focal_length": null,
+      "aperture": null,
+      "mount": null,
+      "price_low": "1850.00",
+      "price_high": "2250.00",
+      "consignment_price_low": "2450.00",
+      "consignment_price_high": null
+    },
+    {
+      "id": 2,
+      "make": "Canon",
+      "model": "EF 70-200mm f/2.8L USM",
+      "product_type": "Lens",
+      "specifications": {
+        "mount": "Canon EF Mount",
+        "aperture": "f2.8",
+        "lens_type": "Telephoto Zoom",
+        "is_L_series": true,
+        "focal_length": "70-200mm"
+      },
+      "ai_matching": {
+        "aliases": [
+          "70-200 2.8",
+          "Canon 70-200L",
+          "70-200 f2.8 L"
+        ],
+        "keywords": [
+          "telephoto",
+          "zoom",
+          "professional",
+          "sports",
+          "wildlife",
+          "L series"
+        ],
+        "vision_ocr": "Canon Lens EF 70-200mm 1:2.8 L USM",
+        "display_text": "Canon EF 70-200mm f2.8 L USM Lens"
+      },
+      "pricing": {
+        "low": 6500,
+        "high": 7500,
+        "currency": "ZAR",
+        "consignment": 8500
+      },
+      "search_vector": "'-200':4A,13A,22B,29C '1':15A '2.8':16A '70':3A,12A,21B,28C 'canon':1A,9A,19B,32C 'ef':2A,11A,20B,33C 'f/2.8l':6A 'f2.8':24B,31C 'l':17A,25B 'len':8B,10A,27B 'mm':5A,14A,23B,30C 'mount':34C 'usm':7A,18A,26B",
+      "is_active": true,
+      "notes": null,
+      "created_at": "2025-12-08T09:46:09.682Z",
+      "updated_at": "2026-01-15T13:07:33.724Z",
+      "full_name": null,
+      "ocr": null,
+      "exact_model": null,
+      "output_text": "Canon EF 70-200mm f/2.8L USM Lens",
+      "focal_length": null,
+      "aperture": null,
+      "mount": null,
+      "price_low": "6500.00",
+      "price_high": "7500.00",
+      "consignment_price_low": "8500.00",
+      "consignment_price_high": null
+    },
+    {
+      "id": 3,
+      "make": "Fujifilm",
+      "model": "XF 56mm f/1.2 R",
+      "product_type": "Lens",
+      "specifications": {
+        "mount": "Fujifilm X Mount",
+        "aperture": "f1.2",
+        "lens_type": "Portrait Prime",
+        "focal_length": "56mm"
+      },
+      "ai_matching": {
+        "aliases": [
+          "XF 56mm",
+          "56mm 1.2",
+          "Fujinon 56"
+        ],
+        "keywords": [
+          "portrait",
+          "prime",
+          "fast",
+          "bokeh"
+        ],
+        "vision_ocr": "FUJINON XF 56mm F1.2 R",
+        "display_text": "Fujifilm XF 56mm f1.2 R Lens"
+      },
+      "pricing": {
+        "low": 6500,
+        "high": 7500,
+        "currency": "ZAR",
+        "consignment": 8500
+      },
+      "search_vector": "'56mm':3A,9A,14B,18C 'f/1.2':4A 'f1.2':10A,15B,19C 'fujifilm':1A,12B,20C 'fujinon':7A 'len':6B,17B 'mount':22C 'r':5A,11A,16B 'x':21C 'xf':2A,8A,13B",
+      "is_active": true,
+      "notes": null,
+      "created_at": "2025-12-08T09:46:09.682Z",
+      "updated_at": "2026-01-15T13:07:33.724Z",
+      "full_name": null,
+      "ocr": null,
+      "exact_model": null,
+      "output_text": "Fujifilm XF 56mm f/1.2 R Lens",
+      "focal_length": null,
+      "aperture": null,
+      "mount": null,
+      "price_low": "6500.00",
+      "price_high": "7500.00",
+      "consignment_price_low": "8500.00",
+      "consignment_price_high": null
+    },
+    {
+      "id": 4,
+      "make": "Canon",
+      "model": "7D Mark II",
+      "product_type": "Body",
+      "specifications": {
+        "mount": "Canon EF",
+        "is_L_series": false
+      },
+      "ai_matching": {
+        "aliases": [
+          "Canon 7D MKII",
+          "Canon 7DII",
+          "Canon 7D Mark2"
+        ],
+        "vision_ocr": "Canon EOS 7D Mark II",
+        "display_text": "Canon 7D Mark II Body"
+      },
+      "pricing": {
+        "low": 6500,
+        "high": 6500,
+        "currency": "ZAR",
+        "consignment_low": 7500,
+        "consignment_high": 7500,
+        "consignment_only": false
+      },
+      "search_vector": "'7d':2A,8A,12B 'bodi':5B,15B 'canon':1A,6A,11B,16C 'ef':17C 'eo':7A 'ii':4A,10A,14B 'mark':3A,9A,13B",
+      "is_active": true,
+      "notes": null,
+      "created_at": "2026-01-08T14:47:42.311Z",
+      "updated_at": "2026-01-15T13:07:23.707Z",
+      "full_name": "Canon 7D Mark II Body",
+      "ocr": null,
+      "exact_model": null,
+      "output_text": "Canon 7D Mark II Body",
+      "focal_length": null,
+      "aperture": null,
+      "mount": null,
+      "price_low": "6500.00",
+      "price_high": "6500.00",
+      "consignment_price_low": "0.00",
+      "consignment_price_high": null
+    },
+    {
+      "id": 5,
+      "make": "Canon",
+      "model": "EF-S 18-200mm f3.5-5.6 IS",
+      "product_type": "Lens",
+      "specifications": {
+        "mount": "Canon EF-S",
+        "aperture": "f3.5-5.6",
+        "lens_type": "Zoom",
+        "focal_length": "18-200mm"
+      },
+      "ai_matching": {
+        "aliases": [
+          "18-200 f3.5-5.6",
+          "18-200 3.5-5.6",
+          "18-200mm"
+        ],
+        "vision_ocr": "Canon EF-S 18-200mm 1:3.5-5.6 IS",
+        "display_text": "Canon EF-S 18-200mm f3.5-5.6 IS Lens"
+      },
+      "pricing": {
+        "low": 1850,
+        "high": 1850,
+        "currency": "ZAR",
+        "consignment_low": 2250,
+        "consignment_high": 2250,
+        "consignment_only": false
+      },
+      "search_vector": "'-200':6A,15A,25B,31C '-5.6':19A '1':17A '18':5A,14A,24B,30C '3.5':18A 'canon':1A,10A,20B,34C 'ef':3A,12A,22B,36C 'ef-':2A,11A,21B,35C 'f3.5-5.6':8A,27B,33C 'len':9B,29B 'mm':7A,16A,26B,32C",
+      "is_active": true,
+      "notes": null,
+      "created_at": "2026-01-08T14:47:42.311Z",
+      "updated_at": "2026-01-15T14:29:25.679Z",
+      "full_name": "Canon EF-S 18-200mm f3.5-5.6 IS Lens",
+      "ocr": null,
+      "exact_model": "Canon Lens EF-S 18-200mm 1:3.5-5.6 IS",
+      "output_text": "Canon EF-S 18-200mm f3.5-5.6 IS Lens",
+      "focal_length": "18-200mm",
+      "aperture": "f3.5-5.6",
+      "mount": "Canon EF-S Mount",
+      "price_low": "1850.00",
+      "price_high": "1850.00",
+      "consignment_price_low": "0.00",
+      "consignment_price_high": null
+    }
+  ],
+  "lensSamples": [
+    {
+      "make": "Nikon",
+      "model": "AF",
+      "product_type": "Lens",
+      "specifications": {},
+      "ai_matching": {}
+    },
+    {
+      "make": "Nikon",
+      "model": "35-70mm f3.3-4.5",
+      "product_type": "Lens",
+      "specifications": {
+        "mount": "Nikon F",
+        "aperture": "f3.3-4.5",
+        "lens_type": "Zoom",
+        "focal_length": "35-70mm"
+      },
+      "ai_matching": {
+        "aliases": [
+          "35 70mm",
+          "35-70",
+          "f3.3",
+          "f4.5"
+        ],
+        "vision_ocr": "Nikon AF 35-70mm 1:3.3-4.5",
+        "display_text": "Nikon AF 35-70mm f3.3-4.5 Lens"
+      }
+    },
+    {
+      "make": "Nikon",
+      "model": "AF",
+      "product_type": "Lens",
+      "specifications": {},
+      "ai_matching": {}
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+🔄 Starting catalog backfill...
+
+📊 Found 1271 rows in equipment_inventory
+
+📥 Loading all rows...
+✨ Processing and inserting...
+
+  ✅ Processed 100/1271 (8%)
+  ✅ Processed 200/1271 (16%)
+  ✅ Processed 300/1271 (24%)
+  ✅ Processed 400/1271 (31%)
+  ✅ Processed 500/1271 (39%)
+  ✅ Processed 600/1271 (47%)
+  ✅ Processed 700/1271 (55%)
+  ✅ Processed 800/1271 (63%)
+  ✅ Processed 900/1271 (71%)
+  ✅ Processed 1000/1271 (79%)
+  ✅ Processed 1100/1271 (87%)
+  ✅ Processed 1200/1271 (94%)
+
+============================================================
+📊 Backfill Complete!
+============================================================
+Total rows:        1271
+Successfully processed: 1271
+Errors:           0
+Warnings:         0
+
+✅ Verification:
+   catalog_items: 1271 rows
+   catalog_ocr_aliases: 6046 aliases
+   Average aliases per item: 4.8
+
+✅ Backfill script completed!

@@ -1,0 +1,577 @@
+{
+  "timestamp": "2026-02-08T13:11:19.615Z",
+  "checks": {
+    "rowCountMatch": true,
+    "pricingNonNull": true
+  },
+  "stats": {
+    "lenses": {
+      "total": 525,
+      "withMount": 522,
+      "withFocal": 261,
+      "withAperture": 261,
+      "mountPct": "99.4",
+      "focalPct": "49.7",
+      "aperturePct": "49.7"
+    },
+    "aliases": {
+      "items_with_aliases": "1271",
+      "total_aliases": "1271",
+      "min_aliases": "2",
+      "avg_aliases": "4.8",
+      "max_aliases": "10"
+    }
+  },
+  "samples": [
+    {
+      "legacy_id": 305,
+      "old_make": "PolarPro",
+      "old_model": "Quartzline 82mm",
+      "old_output": "PolarPro Quartzline 82mm Polarizing CP-L Filter",
+      "old_specs": {
+        "is_L_series": false
+      },
+      "old_ai": {
+        "aliases": [
+          "82mm"
+        ],
+        "vision_ocr": "PolarPro Quartzline 82mm Polarizing CP-L Filter",
+        "display_text": "PolarPro Quartzline 82mm Polarizing CP-L Filter"
+      },
+      "new_make": "PolarPro",
+      "new_output": "PolarPro Quartzline 82mm Polarizing CP-L Filter",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:36.217Z",
+        "is_L_series": false
+      },
+      "alias_count": "4"
+    },
+    {
+      "legacy_id": 756,
+      "old_make": "Sigma",
+      "old_model": "35mm f1.4 ART",
+      "old_output": "Sigma DG 35mm f1.4 ART HSM Lens (Sony E Mount)",
+      "old_specs": {
+        "mount": "Sony E",
+        "aperture": "f1.4",
+        "lens_type": "Standard",
+        "focal_length": "35mm"
+      },
+      "old_ai": {
+        "aliases": [
+          "35 1.4",
+          "35mm f1.4",
+          "35mm f1.4"
+        ],
+        "vision_ocr": "Sigma DG 35mm 1:1.4 ART HSM",
+        "display_text": "Sigma 35mm f1.4 ART Lens (Sony E Mount)"
+      },
+      "new_make": "Sigma",
+      "new_output": "Sigma DG 35mm f1.4 ART HSM Lens (Sony E Mount)",
+      "new_specs": {
+        "mount": "Sony E",
+        "source": "import",
+        "aperture": "f1.4",
+        "lens_type": "Standard",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:39.321Z",
+        "focal_length": "35mm"
+      },
+      "alias_count": "6"
+    },
+    {
+      "legacy_id": 948,
+      "old_make": "Sony",
+      "old_model": "PXW-Z190T",
+      "old_output": "Sony PXW-Z190T Camcorder",
+      "old_specs": {
+        "is_L_series": false
+      },
+      "old_ai": {
+        "aliases": [],
+        "vision_ocr": "Sony PXW-Z190T",
+        "display_text": "Sony PXW-Z190T Camcorder"
+      },
+      "new_make": "Sony",
+      "new_output": "Sony PXW-Z190T Camcorder",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:40.413Z",
+        "is_L_series": false
+      },
+      "alias_count": "3"
+    },
+    {
+      "legacy_id": 387,
+      "old_make": "Zeiss Ikon",
+      "old_model": "Movilux",
+      "old_output": "Zeiss Ikon Movilux",
+      "old_specs": {
+        "is_L_series": false
+      },
+      "old_ai": {
+        "aliases": [],
+        "vision_ocr": "Zeiss Ikon Movilux",
+        "display_text": "Zeiss Ikon Movilux"
+      },
+      "new_make": "Zeiss Ikon",
+      "new_output": "Zeiss Ikon Movilux",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:36.723Z",
+        "is_L_series": false
+      },
+      "alias_count": "2"
+    },
+    {
+      "legacy_id": 45,
+      "old_make": "Canon",
+      "old_model": "5D",
+      "old_output": "Canon 5D Body",
+      "old_specs": {
+        "mount": "Canon EF",
+        "is_L_series": false
+      },
+      "old_ai": {
+        "aliases": [
+          "Canon 5D"
+        ],
+        "vision_ocr": "Canon EOS 5D",
+        "display_text": "Canon 5D Body"
+      },
+      "new_make": "Canon",
+      "new_output": "Canon 5D Body",
+      "new_specs": {
+        "mount": "Canon EF",
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:33.992Z",
+        "is_L_series": false
+      },
+      "alias_count": "4"
+    },
+    {
+      "legacy_id": 874,
+      "old_make": "Opteka",
+      "old_model": "X-Grip",
+      "old_output": "Opteka X-Grip DSLR Stabilizing Handle System",
+      "old_specs": {},
+      "old_ai": {
+        "aliases": [
+          "X Grip",
+          "DSLR Stabilizing Handle System"
+        ],
+        "vision_ocr": "Opteka X-Grip",
+        "display_text": "Opteka X-Grip DSLR Stabilizing Handle System"
+      },
+      "new_make": "Opteka",
+      "new_output": "Opteka X-Grip DSLR Stabilizing Handle System",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:39.965Z"
+      },
+      "alias_count": "5"
+    },
+    {
+      "legacy_id": 650,
+      "old_make": "Rode",
+      "old_model": "VideoMic NTG",
+      "old_output": "Rode VideoMic NTG Hybrid Analog/USB Camera-Mount Shotgun Microphone",
+      "old_specs": {},
+      "old_ai": {
+        "aliases": [
+          "Rode VideoMic NTG"
+        ],
+        "vision_ocr": "Rode VideoMic NTG",
+        "display_text": "Rode VideoMic NTG Hybrid Analog/USB Camera-Mount Shotgun Microphone"
+      },
+      "new_make": "Rode",
+      "new_output": "Rode VideoMic NTG Hybrid Analog/USB Camera-Mount Shotgun Microphone",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:38.591Z"
+      },
+      "alias_count": "3"
+    },
+    {
+      "legacy_id": 689,
+      "old_make": "Benro",
+      "old_model": "S4",
+      "old_output": "Benro S4 Video Head",
+      "old_specs": {},
+      "old_ai": {
+        "aliases": [],
+        "vision_ocr": "Benro S4 Video Head",
+        "display_text": "Benro S4 Video Head"
+      },
+      "new_make": "Benro",
+      "new_output": "Benro S4 Video Head",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:38.808Z"
+      },
+      "alias_count": "3"
+    },
+    {
+      "legacy_id": 605,
+      "old_make": "Fujifilm",
+      "old_model": "27mm f2.8 R WR",
+      "old_output": "Fujifilm XF 27mm f2.8 R WR Lens",
+      "old_specs": {
+        "mount": "Fujifilm X",
+        "aperture": "f2.8",
+        "lens_type": "Wide Angle",
+        "focal_length": "27mm"
+      },
+      "old_ai": {
+        "aliases": [
+          "27mm f2.8",
+          "27 mm f2.8",
+          "27 1:2.8"
+        ],
+        "vision_ocr": "Fujifilm XF 27mm f2.8 R WR",
+        "display_text": "Fujifilm XF 27mm f2.8 R WR Lens"
+      },
+      "new_make": "Fujifilm",
+      "new_output": "Fujifilm XF 27mm f2.8 R WR Lens",
+      "new_specs": {
+        "mount": "Fujifilm X Mount",
+        "source": "import",
+        "aperture": "f2.8",
+        "lens_type": "Wide Angle",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:38.291Z",
+        "aperture_min": 2.8,
+        "focal_length": "27mm",
+        "focal_min_mm": 27
+      },
+      "alias_count": "6"
+    },
+    {
+      "legacy_id": 1113,
+      "old_make": "Sony",
+      "old_model": "160GB CFexpress Type A + MRW-G2 Reader",
+      "old_output": "Sony 160GB CFexpress Type A Memory Card + Sony MRW-G2 CFexpress Type A / SD Memory Card Reader",
+      "old_specs": {
+        "type": "Memory Card Kit",
+        "capacity": "160GB",
+        "card_type": "CFexpress Type A"
+      },
+      "old_ai": {
+        "aliases": [
+          "CFexpress",
+          "Sony memory card"
+        ],
+        "vision_ocr": "Sony CFexpress MRW-G2",
+        "display_text": "Sony 160GB CFexpress Type A + MRW-G2 Reader Kit"
+      },
+      "new_make": "Sony",
+      "new_output": "Sony 160GB CFexpress Type A Memory Card + Sony MRW-G2 CFexpress Type A / SD Memory Card Reader",
+      "new_specs": {
+        "type": "Memory Card Kit",
+        "source": "import",
+        "capacity": "160GB",
+        "card_type": "CFexpress Type A",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:41.361Z"
+      },
+      "alias_count": "6"
+    },
+    {
+      "legacy_id": 626,
+      "old_make": "Sony",
+      "old_model": "A6700",
+      "old_output": "Sony A6700 + Sony E 16-50mm f3.5-5.6 OSS PZ Lens (4 100 Actuations)",
+      "old_specs": {
+        "mount": "Sony E",
+        "aperture": "f3.5-5.6",
+        "lens_type": "Zoom",
+        "is_L_series": false,
+        "focal_length": "16-50mm"
+      },
+      "old_ai": {
+        "aliases": [
+          "16-50 3.5-5.6",
+          "16-50 f3.5-5.6"
+        ],
+        "vision_ocr": "Sony E 16-50mm 1:3.5-5.6 OSS PZ",
+        "display_text": "Sony A6700 + Sony E 16-50mm f3.5-5.6 OSS PZ Lens"
+      },
+      "new_make": "Sony",
+      "new_output": "Sony A6700 + Sony E 16-50mm f3.5-5.6 OSS PZ Lens (4 100 Actuations)",
+      "new_specs": {
+        "mount": "Sony E",
+        "source": "import",
+        "aperture": "f3.5-5.6",
+        "lens_type": "Zoom",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:38.434Z",
+        "is_L_series": false,
+        "focal_length": "16-50mm"
+      },
+      "alias_count": "6"
+    },
+    {
+      "legacy_id": 701,
+      "old_make": "Nikon",
+      "old_model": "18-70mm f3.5-4.5 G DX ED",
+      "old_output": "Nikon AF-S DX 18-70mm f3.5-4.5G ED Lens",
+      "old_specs": {
+        "mount": "Nikon F",
+        "aperture": "f3.5-4.5",
+        "lens_type": "Zoom",
+        "focal_length": "18-70mm"
+      },
+      "old_ai": {
+        "aliases": [
+          "18-70 3.5-4.5",
+          "18 70 3.5 4.5",
+          "18-70 f3.5-4.5"
+        ],
+        "vision_ocr": "Nikon AF-S 18-70mm 1:3.5-4.5 G DX ED",
+        "display_text": "Nikon AF-S 18-70mm f3.5-4.5 G DX ED Lens"
+      },
+      "new_make": "Nikon",
+      "new_output": "Nikon AF-S DX 18-70mm f3.5-4.5G ED Lens",
+      "new_specs": {
+        "mount": "Nikon F Mount",
+        "source": "import",
+        "aperture": "f3.5-4.5",
+        "lens_type": "Zoom",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:38.868Z",
+        "aperture_max": 4.5,
+        "aperture_min": 3.5,
+        "focal_length": "18-70mm",
+        "focal_max_mm": 70,
+        "focal_min_mm": 18
+      },
+      "alias_count": "8"
+    },
+    {
+      "legacy_id": 499,
+      "old_make": "Canon",
+      "old_model": "7D",
+      "old_output": "Canon 7D Body (41 600 Actuations)",
+      "old_specs": {
+        "mount": "Canon EF",
+        "is_L_series": false
+      },
+      "old_ai": {
+        "aliases": [
+          "7D"
+        ],
+        "vision_ocr": "Canon EOS 7D",
+        "display_text": "Canon 7D Body"
+      },
+      "new_make": "Canon",
+      "new_output": "Canon 7D Body (41 600 Actuations)",
+      "new_specs": {
+        "mount": "Canon EF",
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:37.598Z",
+        "is_L_series": false
+      },
+      "alias_count": "4"
+    },
+    {
+      "legacy_id": 374,
+      "old_make": "Canon",
+      "old_model": "6D Mark II",
+      "old_output": "Canon 6D Body Mark II",
+      "old_specs": {
+        "mount": "Canon EF",
+        "is_L_series": false
+      },
+      "old_ai": {
+        "aliases": [
+          "6D2",
+          "6D Mark2"
+        ],
+        "vision_ocr": "Canon EOS 6D Mark II",
+        "display_text": "Canon 6D Mark II Body"
+      },
+      "new_make": "Canon",
+      "new_output": "Canon 6D Body Mark II",
+      "new_specs": {
+        "mount": "Canon EF",
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:36.602Z",
+        "is_L_series": false
+      },
+      "alias_count": "6"
+    },
+    {
+      "legacy_id": 1116,
+      "old_make": "Pentax",
+      "old_model": "70-210m SMC M",
+      "old_output": "Pentax 70-210m SMC M Lens",
+      "old_specs": {
+        "mount": "Pentax K",
+        "aperture": "null",
+        "lens_type": "Telephoto Zoom",
+        "is_L_series": "false",
+        "focal_length": "70-210mm"
+      },
+      "old_ai": {
+        "aliases": [
+          "70-210mm",
+          "70 210mm",
+          "70-210 m",
+          "70 210 m"
+        ],
+        "vision_ocr": "Pentax 70-210m SMC M",
+        "display_text": "Pentax 70-210m SMC M Lens"
+      },
+      "new_make": "Pentax",
+      "new_output": "Pentax 70-210m SMC M Lens",
+      "new_specs": {
+        "mount": "Pentax K",
+        "source": "import",
+        "aperture": "null",
+        "lens_type": "Telephoto Zoom",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:41.392Z",
+        "is_L_series": "false",
+        "focal_length": "70-210mm"
+      },
+      "alias_count": "7"
+    },
+    {
+      "legacy_id": 303,
+      "old_make": "Rode",
+      "old_model": "Wireless Go",
+      "old_output": "Rodel Wireless Go",
+      "old_specs": {},
+      "old_ai": {
+        "aliases": [
+          "Wireless Go"
+        ],
+        "vision_ocr": "Rode Wireless Go",
+        "display_text": "Rode Wireless Go"
+      },
+      "new_make": "Rode",
+      "new_output": "Rodel Wireless Go",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:36.208Z"
+      },
+      "alias_count": "3"
+    },
+    {
+      "legacy_id": 563,
+      "old_make": "Lowepro",
+      "old_model": "ProTactic BP 350 AW II",
+      "old_output": "Lowepro ProTactic BP 350 AW II",
+      "old_specs": {
+        "is_L_series": false
+      },
+      "old_ai": {
+        "aliases": [],
+        "vision_ocr": "Lowepro ProTactic BP 350 AW II",
+        "display_text": "Lowepro ProTactic BP 350 AW II"
+      },
+      "new_make": "Lowepro",
+      "new_output": "Lowepro ProTactic BP 350 AW II",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:38.008Z",
+        "is_L_series": false
+      },
+      "alias_count": "2"
+    },
+    {
+      "legacy_id": 87,
+      "old_make": "Nikon",
+      "old_model": "AF-S 35mm f1.8 G DX",
+      "old_output": "Nikon Z 35mm f1.8 S Lens",
+      "old_specs": {
+        "mount": "Nikon F",
+        "aperture": "f1.8",
+        "lens_type": "Standard",
+        "focal_length": "35mm"
+      },
+      "old_ai": {
+        "aliases": [
+          "35 1.8",
+          "35mm f1.8",
+          "35 f1.8"
+        ],
+        "vision_ocr": "Nikon AF-S 35mm 1:1.8 G DX",
+        "display_text": "Nikon AF-S 35mm f1.8 G DX Lens"
+      },
+      "new_make": "Nikon",
+      "new_output": "Nikon Z 35mm f1.8 S Lens",
+      "new_specs": {
+        "mount": "Nikon Z Mount",
+        "source": "import",
+        "aperture": "f1.8",
+        "lens_type": "Standard",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:34.393Z",
+        "aperture_min": 1.8,
+        "focal_length": "35mm",
+        "focal_min_mm": 35
+      },
+      "alias_count": "8"
+    },
+    {
+      "legacy_id": 580,
+      "old_make": "Sony",
+      "old_model": "ZV-E1",
+      "old_output": "Sony ZV-E1 Body",
+      "old_specs": {
+        "mount": "Sony E",
+        "is_L_series": false
+      },
+      "old_ai": {
+        "aliases": [
+          "ZV-E1"
+        ],
+        "vision_ocr": "Sony ZV-E1",
+        "display_text": "Sony ZV-E1 Body"
+      },
+      "new_make": "Sony",
+      "new_output": "Sony ZV-E1 Body",
+      "new_specs": {
+        "mount": "Sony E",
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:38.116Z",
+        "is_L_series": false
+      },
+      "alias_count": "3"
+    },
+    {
+      "legacy_id": 857,
+      "old_make": "Manfrotto",
+      "old_model": "190",
+      "old_output": "Manfrotto 190 Tripod + Manfrotto 141RC 3-Way Head",
+      "old_specs": {},
+      "old_ai": {
+        "aliases": [],
+        "vision_ocr": "Manfrotto 190 Tripod",
+        "display_text": "Manfrotto 190 Tripod + Manfrotto 141RC 3-Way Head"
+      },
+      "new_make": "Manfrotto",
+      "new_output": "Manfrotto 190 Tripod + Manfrotto 141RC 3-Way Head",
+      "new_specs": {
+        "source": "import",
+        "confidence": 0.7,
+        "import_date": "2026-02-08T13:10:39.882Z"
+      },
+      "alias_count": "4"
+    }
+  ]
+}
