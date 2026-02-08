@@ -305,16 +305,16 @@ export default function EnrichmentReviewsPage() {
                             {r.make || "?"} — {r.output_text || "?"}
                           </CardTitle>
                           <CardDescription className="mt-1">
-                            <div className="text-gray-700">
+                            <span className="text-gray-700 block">
                               Confidence: <strong>{Number(r.confidence_score).toFixed(3)}</strong> • Status:{" "}
                               <strong>{r.status}</strong>
-                            </div>
-                            <div className="text-gray-600 mt-1">
+                            </span>
+                            <span className="text-gray-600 block mt-1">
                               Suggested:{" "}
                               {key.mount ? <span className="mr-3">Mount: <strong>{key.mount}</strong></span> : null}
                               {key.focal ? <span className="mr-3">Focal: <strong>{key.focal}</strong></span> : null}
                               {key.aperture ? <span>Aperture: <strong>{key.aperture}</strong></span> : null}
-                            </div>
+                            </span>
                           </CardDescription>
                         </div>
                         <div className="flex gap-2">
