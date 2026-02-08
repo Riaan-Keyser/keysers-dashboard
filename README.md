@@ -118,6 +118,13 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - **Mark as Paid** - Move purchases to Payment Completed (triggers repair workflow if flagged)
 - **Auto-repair workflow** - Items marked for repair appear in Repairs tab after payment
 
+✅ **Blocking Catalog Issues (Category A)**
+- Detects **blocking data errors** in `catalog_items` that require human intervention
+- Shows a **red badge** on the Settings tab when open blocking issues exist
+- Admin UI to **rescan**, **filter**, and **resolve** issues (with required resolution notes)
+- Issues are **persistent + idempotent** (no duplicates for the same item/type while OPEN)
+- Rescans can **auto-resolve** issues that no longer apply
+
 ## Tech Stack
 
 - **Framework**: Next.js 15 (App Router)
@@ -200,6 +207,28 @@ After seeding, you can login with:
 - **Password**: admin123
 
 ⚠️ **Important**: Change the admin password immediately in production!
+
+## Blocking Catalog Issues (Category A)
+
+Blocking catalog issues are stored in the **Keysers Inventory database** (`keysers_inventory`) in the table `catalog_blocking_issues`.
+
+- **Rescan (Admin)**: Dashboard → Settings → **Blocking Catalog Issues** → “Rescan now”
+- **Rescan via CLI (cron key)**:
+  - Set `ADMIN_CRON_KEY` (min 32 chars) in your environment
+  - Then run:
+
+```bash
+curl -X POST "http://localhost:3000/api/admin/catalog/issues/rescan" \
+  -H "x-admin-cron-key: $ADMIN_CRON_KEY"
+```
+- **What triggers issues (v1)**:
+  - Lens missing mount
+  - Lens missing both focal + aperture
+  - Invalid focal/aperture ranges
+  - Null/negative pricing values
+  - Active items missing required fields (make/output_text/product_type)
+
+The scanner will **upsert OPEN issues** and **auto-resolve** OPEN issues that no longer apply.
 
 ## Key Workflows
 

@@ -72,8 +72,103 @@ interface ParsedLens {
   hasDistortion: boolean
   hasVignetting: boolean
   hasTca: boolean
+  raw: any
   rawXml: string
   sourceFile: string
+}
+
+function collectNumericValues(value: any): number[] {
+  const out: number[] = []
+  const visit = (v: any) => {
+    if (v === null || v === undefined) return
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      out.push(v)
+      return
+    }
+    if (typeof v === 'string') {
+      const n = Number(v)
+      if (Number.isFinite(n)) out.push(n)
+      return
+    }
+    if (Array.isArray(v)) {
+      v.forEach(visit)
+      return
+    }
+    if (typeof v === 'object') {
+      Object.values(v).forEach(visit)
+    }
+  }
+  visit(value)
+  return out
+}
+
+function gatherCalibrationNumbers(calibration: any): { focals: number[]; apertures: number[] } {
+  const focals: number[] = []
+  const apertures: number[] = []
+
+  const visit = (node: any) => {
+    if (!node) return
+    if (Array.isArray(node)) {
+      node.forEach(visit)
+      return
+    }
+    if (typeof node !== 'object') return
+
+    // Lensfun calibration nodes commonly use attributes like focal/aperture/distance
+    if ('focal' in node) focals.push(...collectNumericValues((node as any).focal))
+    if ('aperture' in node) apertures.push(...collectNumericValues((node as any).aperture))
+
+    Object.values(node).forEach(visit)
+  }
+
+  visit(calibration)
+  return { focals, apertures }
+}
+
+function parseFocalFromModel(model: string): { min?: number; max?: number } {
+  const normalized = normalizeString(model)
+
+  // Zoom ranges like "70-200mm"
+  const zoom = normalized.match(/\b(\d{1,4}(?:\.\d+)?)\s*-\s*(\d{1,4}(?:\.\d+)?)mm\b/)
+  if (zoom) {
+    const min = Number(zoom[1])
+    const max = Number(zoom[2])
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      return { min: Math.min(min, max), max: Math.max(min, max) }
+    }
+  }
+
+  // Prime like "500mm"
+  const prime = normalized.match(/\b(\d{1,4}(?:\.\d+)?)mm\b/)
+  if (prime) {
+    const f = Number(prime[1])
+    if (Number.isFinite(f)) return { min: f, max: f }
+  }
+
+  return {}
+}
+
+function parseApertureFromModel(model: string): { min?: number; max?: number } {
+  const normalized = normalizeString(model)
+
+  // Variable max aperture like "f4.5-5.6" or "f/4.5-5.6"
+  const range = normalized.match(/\bf(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)(?=[a-z\s]|$)/)
+  if (range) {
+    const a = Number(range[1])
+    const b = Number(range[2])
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      return { min: Math.min(a, b), max: Math.max(a, b) }
+    }
+  }
+
+  // Constant max aperture like "f2.8"
+  const single = normalized.match(/\bf(\d+(?:\.\d+)?)(?=[a-z\s]|$)/)
+  if (single) {
+    const a = Number(single[1])
+    if (Number.isFinite(a)) return { min: a, max: a }
+  }
+
+  return {}
 }
 
 /**
@@ -160,10 +255,37 @@ function parseLensfunXML(filePath: string): ParsedLens[] {
   
   for (const lens of lensArray) {
     try {
-      const maker = lens.maker?._text || lens.maker || 'Unknown'
-      const model = lens.model?._text || lens.model
+      // Handle maker field which can be string, object, or array
+      let maker: string
+      if (typeof lens.maker === 'string') {
+        maker = lens.maker
+      } else if (lens.maker?._text) {
+        maker = lens.maker._text
+      } else if (Array.isArray(lens.maker)) {
+        maker = lens.maker.map((m: any) => m?._text || m).filter(Boolean).join(' ')
+      } else if (typeof lens.maker === 'object') {
+        maker = JSON.stringify(lens.maker)
+      } else {
+        maker = 'Unknown'
+      }
       
-      if (!model) continue // Skip if no model
+      // Handle model field which can be string, object, or array
+      let model: string
+      if (typeof lens.model === 'string') {
+        model = lens.model
+      } else if (lens.model?._text) {
+        model = lens.model._text
+      } else if (Array.isArray(lens.model)) {
+        // If array, join or take first element
+        model = lens.model.map((m: any) => m._text || m).filter(Boolean).join(', ')
+      } else if (typeof lens.model === 'object') {
+        // If object, try to extract text or stringify
+        model = JSON.stringify(lens.model)
+      } else {
+        model = ''
+      }
+      
+      if (!model || typeof model !== 'string') continue // Skip if no valid model
       
       // Parse mounts
       let mounts: string[] = []
@@ -185,22 +307,42 @@ function parseLensfunXML(filePath: string): ParsedLens[] {
       const hasVignetting = !!lens.calibration?.vignetting
       const hasTca = !!lens.calibration?.tca
       
-      // Try to extract focal/aperture from calibration
+      // Prefer parsing focal/aperture specs from model text (these represent lens specs),
+      // and only fall back to calibration-derived ranges when model text lacks them.
+      const modelFocal = parseFocalFromModel(model)
+      const modelAperture = parseApertureFromModel(model)
+
+      // Try to extract focal/aperture from calibration as a fallback (or to fill missing focal for fixed-lens compacts)
+      let calFocalMin: number | undefined
+      let calFocalMax: number | undefined
+      let calApertureMin: number | undefined
+      let calApertureMax: number | undefined
       if (lens.calibration) {
         const cal = Array.isArray(lens.calibration) ? lens.calibration[0] : lens.calibration
-        
-        // Distortion might have focal attribute
-        if (cal.distortion) {
-          const dist = Array.isArray(cal.distortion) ? cal.distortion[0] : cal.distortion
-          if (dist.focal) {
-            const focal = parseFloat(dist.focal)
-            if (!isNaN(focal)) {
-              focalMin = focalMin ? Math.min(focalMin, focal) : focal
-              focalMax = focalMax ? Math.max(focalMax, focal) : focal
-            }
-          }
+        const { focals, apertures } = gatherCalibrationNumbers(cal)
+        if (focals.length > 0) {
+          const sorted = focals.filter(Number.isFinite).sort((a, b) => a - b)
+          calFocalMin = sorted[0]
+          calFocalMax = sorted[sorted.length - 1]
+        }
+        if (apertures.length > 0) {
+          const sorted = apertures.filter(Number.isFinite).sort((a, b) => a - b)
+          calApertureMin = sorted[0]
+          calApertureMax = sorted[sorted.length - 1]
         }
       }
+
+      // Focal: use model-derived if present, else calibration-derived
+      if (modelFocal.min !== undefined) focalMin = modelFocal.min
+      else if (calFocalMin !== undefined) focalMin = calFocalMin
+      if (modelFocal.max !== undefined) focalMax = modelFocal.max
+      else if (calFocalMax !== undefined) focalMax = calFocalMax
+
+      // Aperture: use model-derived max aperture range if present, else calibration-derived
+      if (modelAperture.min !== undefined) apertureMin = modelAperture.min
+      else if (calApertureMin !== undefined) apertureMin = calApertureMin
+      if (modelAperture.max !== undefined) apertureMax = modelAperture.max
+      else if (calApertureMax !== undefined) apertureMax = calApertureMax
       
       // Parse variant
       const variant = lens.variant?._text || lens.variant
@@ -225,6 +367,7 @@ function parseLensfunXML(filePath: string): ParsedLens[] {
         hasDistortion,
         hasVignetting,
         hasTca,
+        raw: lens,
         rawXml: JSON.stringify(lens),
         sourceFile: path.basename(filePath)
       })
@@ -239,8 +382,23 @@ function parseLensfunXML(filePath: string): ParsedLens[] {
 /**
  * Import lenses into database
  */
-async function importLensesToDatabase(lenses: ParsedLens[]): Promise<void> {
+async function importLensesToDatabase(
+  lenses: ParsedLens[],
+  meta: { mode: 'ONLINE' | 'OFFLINE'; sourceUrl: string; sourceRef?: string }
+): Promise<void> {
   console.log(`💾 Importing ${lenses.length} lenses into database...\n`)
+
+  // Create an immutable import run (do NOT overwrite previous runs)
+  const run = await prisma.lensfunImportRun.create({
+    data: {
+      sourceUrl: meta.sourceUrl,
+      sourceRef: meta.sourceRef,
+      mode: meta.mode,
+      startedAt: new Date(),
+      notes: `Imported via scripts/import_lensfun.ts (${meta.mode})`
+    }
+  })
+  console.log(`🧾 Import run: ${run.id}\n`)
   
   let imported = 0
   let skipped = 0
@@ -248,8 +406,17 @@ async function importLensesToDatabase(lenses: ParsedLens[]): Promise<void> {
   
   for (const lens of lenses) {
     try {
-      const makerNormalized = normalizeString(lens.maker)
-      const modelNormalized = normalizeString(lens.model)
+      // Ensure maker and model are strings
+      const makerStr = String(lens.maker || 'Unknown')
+      const modelStr = String(lens.model || '')
+      
+      if (!modelStr) {
+        errors++
+        continue
+      }
+      
+      const makerNormalized = normalizeString(makerStr)
+      const modelNormalized = normalizeString(modelStr)
       const searchTokens = extractKeyTokens(modelNormalized)
       
       // Check if already exists
@@ -257,7 +424,8 @@ async function importLensesToDatabase(lenses: ParsedLens[]): Promise<void> {
         where: {
           makerNormalized,
           modelNormalized,
-          sourceFile: lens.sourceFile
+          sourceFile: lens.sourceFile,
+          importRunId: run.id
         }
       })
       
@@ -282,8 +450,10 @@ async function importLensesToDatabase(lenses: ParsedLens[]): Promise<void> {
           hasDistortion: lens.hasDistortion,
           hasVignetting: lens.hasVignetting,
           hasTca: lens.hasTca,
+          raw: lens.raw,
           rawXml: lens.rawXml,
           sourceFile: lens.sourceFile,
+          importRunId: run.id,
           makerNormalized,
           modelNormalized,
           searchTokens
@@ -305,6 +475,11 @@ async function importLensesToDatabase(lenses: ParsedLens[]): Promise<void> {
   console.log(`   Imported: ${imported}`)
   console.log(`   Skipped (duplicates): ${skipped}`)
   console.log(`   Errors: ${errors}`)
+
+  await prisma.lensfunImportRun.update({
+    where: { id: run.id },
+    data: { completedAt: new Date() }
+  })
 }
 
 /**
@@ -348,7 +523,11 @@ async function main() {
     console.log(`\n✅ Parsed ${allLenses.length} total lenses from ${xmlFiles.length} files\n`)
     
     // Step 3: Import to database
-    await importLensesToDatabase(allLenses)
+    await importLensesToDatabase(allLenses, {
+      mode: offline ? 'OFFLINE' : 'ONLINE',
+      sourceUrl: LENSFUN_BASE_URL,
+      sourceRef: 'master'
+    })
     
     // Step 4: Show summary stats
     const stats = await prisma.lensfunLens.groupBy({

@@ -4,6 +4,30 @@ import { authOptions, hasPermission } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { UserRole, ProductType } from "@prisma/client"
 
+function safeJsonParse(value: any): any | null {
+  if (typeof value !== "string") return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function isNonEmptyString(v: any): v is string {
+  return typeof v === "string" && v.trim().length > 0
+}
+
+function getLensRequiredMissingFromSpecs(specs: any): string[] {
+  const missing: string[] = []
+  const mount = specs?.mount
+  const focalMin = specs?.focal_min_mm
+  const apertureMin = specs?.aperture_min
+  if (!isNonEmptyString(mount)) missing.push("specifications.mount")
+  if (focalMin === null || focalMin === undefined || focalMin === "") missing.push("specifications.focal_min_mm")
+  if (apertureMin === null || apertureMin === undefined || apertureMin === "") missing.push("specifications.aperture_min")
+  return missing
+}
+
 // GET /api/products - Search/list products
 export async function GET(request: NextRequest) {
   try {
@@ -71,6 +95,7 @@ export async function POST(request: NextRequest) {
       model,
       variant,
       productType,
+      activateNow,
       buyPriceMin,
       buyPriceMax,
       consignPriceMin,
@@ -81,8 +106,25 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Validate required fields
-    if (!name || !brand || !model || !productType || !buyPriceMin || !buyPriceMax || !consignPriceMin || !consignPriceMax) {
+    if (!name || !brand || !model || !productType || buyPriceMin === undefined || buyPriceMax === undefined || consignPriceMin === undefined || consignPriceMax === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    const wantsActive = activateNow === undefined ? true : !!activateNow
+    let active = wantsActive
+
+    if (String(productType).toUpperCase() === "LENS") {
+      const specsObj = safeJsonParse(specifications) || {}
+      const missing = getLensRequiredMissingFromSpecs(specsObj)
+      if (wantsActive && missing.length > 0) {
+        return NextResponse.json(
+          { error: "Cannot activate lens product: missing required lens specs", missing },
+          { status: 400 }
+        )
+      }
+      if (!wantsActive) {
+        active = false
+      }
     }
 
     const product = await prisma.product.create({
@@ -99,7 +141,7 @@ export async function POST(request: NextRequest) {
         description,
         specifications,
         imageUrl,
-        active: true
+        active
       }
     })
 

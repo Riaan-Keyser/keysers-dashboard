@@ -84,13 +84,67 @@ export function normalizeString(text: string): string {
   return text
     .toLowerCase()
     .replace(/[–—]/g, '-')                    // Normalize dashes
-    .replace(/f\s*\/\s*/gi, 'f')             // "f / 2.8" → "f2.8"
-    .replace(/f\s*(\d)/gi, 'f$1')            // "f 2.8" → "f2.8"
+    // Only treat standalone "f" as aperture marker (avoid corrupting "ef 24" into "f24")
+    .replace(/\bf\s*\/\s*/gi, 'f')           // "f / 2.8" → "f2.8"
+    .replace(/\bf\s*(\d)/gi, 'f$1')          // "f 2.8" → "f2.8"
     .replace(/(\d+)\s*mm/gi, '$1mm')         // "24 mm" → "24mm"
     .replace(/(\d+)\s*-\s*(\d+)/g, '$1-$2')  // "24 - 105" → "24-105"
     .replace(/[^\w\s\-\.]/g, ' ')            // Remove punctuation except - and .
     .replace(/\s+/g, ' ')                    // Collapse whitespace
     .trim()
+}
+
+function extractFocalSignature(normalized: string): {
+  primes: number[]
+  ranges: Array<{ min: number; max: number }>
+} {
+  const primes: number[] = []
+  const ranges: Array<{ min: number; max: number }> = []
+
+  const rangeMatches = normalized.matchAll(/\b(\d{1,4}(?:\.\d+)?)\s*-\s*(\d{1,4}(?:\.\d+)?)mm\b/g)
+  for (const m of rangeMatches) {
+    const a = Number(m[1])
+    const b = Number(m[2])
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      ranges.push({ min: Math.min(a, b), max: Math.max(a, b) })
+    }
+  }
+
+  const primeMatches = normalized.matchAll(/\b(\d{1,4}(?:\.\d+)?)mm\b/g)
+  for (const m of primeMatches) {
+    const a = Number(m[1])
+    if (Number.isFinite(a)) primes.push(a)
+  }
+
+  return { primes, ranges }
+}
+
+function extractApertureSignature(normalized: string): { mins: number[]; maxs: number[] } {
+  const mins: number[] = []
+  const maxs: number[] = []
+
+  // Variable max aperture like f4.5-5.6
+  const rangeMatches = normalized.matchAll(/\bf(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\b/g)
+  for (const m of rangeMatches) {
+    const a = Number(m[1])
+    const b = Number(m[2])
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      mins.push(Math.min(a, b))
+      maxs.push(Math.max(a, b))
+    }
+  }
+
+  // Single max aperture like f2.8
+  const singleMatches = normalized.matchAll(/\bf(\d+(?:\.\d+)?)\b/g)
+  for (const m of singleMatches) {
+    const a = Number(m[1])
+    if (Number.isFinite(a)) {
+      mins.push(a)
+      maxs.push(a)
+    }
+  }
+
+  return { mins, maxs }
 }
 
 /**
@@ -101,16 +155,20 @@ export function extractKeyTokens(normalized: string): string[] {
   const tokens: string[] = []
   
   // Focal length ranges (e.g., "24-105", "70-200")
-  const focalRanges = normalized.match(/(\d+)\s*-\s*(\d+)\s*mm/g)
+  const focalRanges = normalized.match(/(\d{1,4}(?:\.\d+)?)\s*-\s*(\d{1,4}(?:\.\d+)?)\s*mm/g)
   if (focalRanges) tokens.push(...focalRanges)
   
   // Single focal lengths (e.g., "50mm", "85mm")
-  const focalSingle = normalized.match(/\b(\d+)mm\b/g)
+  const focalSingle = normalized.match(/\b(\d{1,4}(?:\.\d+)?)mm\b/g)
   if (focalSingle) tokens.push(...focalSingle)
   
   // Apertures (e.g., "f2.8", "f4")
-  const apertures = normalized.match(/f\d+\.?\d*/g)
+  const apertures = normalized.match(/\bf\d+\.?\d*/g)
   if (apertures) tokens.push(...apertures)
+
+  // Aperture ranges (e.g., "f4.5-5.6")
+  const apertureRanges = normalized.match(/\bf\d+\.?\d*\s*-\s*\d+\.?\d*/g)
+  if (apertureRanges) tokens.push(...apertureRanges.map(t => t.replace(/\s+/g, '')))
   
   // Series markers
   const series = normalized.match(/\b(l|gm|art|sp|macro|is|usm|vc|di|oss|wr|ed|afs|vr)\b/g)
@@ -265,6 +323,46 @@ export function computeLensfunMatchConfidence(
   if (matchingTokens.length > 0) {
     reasons.push(`  Matching tokens: ${matchingTokens.join(', ')}`)
   }
+
+  // Step 3b: Hard penalties for obvious focal/aperture token mismatches (prevents 500mm → 300mm)
+  const catFocal = extractFocalSignature(catalogNormalized)
+  const lensFocalFromText = extractFocalSignature(lensfunNormalized)
+  const lensFocalMin = lensfunLens.focalMin ?? (lensFocalFromText.primes[0] ?? lensFocalFromText.ranges[0]?.min ?? null)
+  const lensFocalMax = lensfunLens.focalMax ?? (lensFocalFromText.ranges[0]?.max ?? lensFocalFromText.primes[0] ?? null)
+
+  const catAperture = extractApertureSignature(catalogNormalized)
+  const lensApertureMin = lensfunLens.apertureMin ?? null
+  const lensApertureMax = lensfunLens.apertureMax ?? null
+
+  let focalMismatchHuge = false
+  // If catalog mentions a specific prime focal (largest mm token), ensure candidate range contains it.
+  if (catFocal.primes.length > 0 && lensFocalMin !== null) {
+    const catPrime = Math.max(...catFocal.primes)
+    const min = lensFocalMin
+    const max = lensFocalMax ?? lensFocalMin
+    const within = catPrime >= (min - 1) && catPrime <= (max + 1)
+    if (!within) {
+      const nearest = catPrime < min ? min : max
+      const diff = Math.abs(catPrime - nearest)
+      const ratio = nearest > 0 ? catPrime / nearest : Infinity
+      if (diff >= 50 && ratio >= 1.25) {
+        focalMismatchHuge = true
+        reasons.push(`FOCAL MISMATCH HUGE: catalog has ${catPrime}mm, candidate range is ${min}-${max}mm (diff ${diff}mm)`)
+      } else {
+        reasons.push(`Focal mismatch: catalog has ${catPrime}mm, candidate range is ${min}-${max}mm`)
+      }
+    }
+  }
+
+  let apertureMismatch = false
+  if (catAperture.mins.length > 0 && lensApertureMin !== null) {
+    const catMin = Math.min(...catAperture.mins)
+    const diff = Math.abs(catMin - lensApertureMin)
+    if (diff >= 0.7) {
+      apertureMismatch = true
+      reasons.push(`Aperture mismatch: catalog has f${catMin}, candidate has f${lensApertureMin} (diff ${diff.toFixed(1)})`)
+    }
+  }
   
   // Step 4: Mount compatibility (15% weight)
   const mountScore = checkMountMatch(catalogItem.specifications, lensfunLens.mounts)
@@ -275,12 +373,27 @@ export function computeLensfunMatchConfidence(
   reasons.push(`Spec consistency: ${(specScore * 100).toFixed(0)}%`)
   
   // Calculate weighted final score
-  const finalScore = (
+  let finalScore = (
     makerScore * 0.25 +
     modelScore * 0.50 +
     mountScore * 0.15 +
     specScore * 0.10
   )
+
+  // Apply penalties after weighting so they affect the final decision
+  if (focalMismatchHuge) {
+    // Hard reject unless extremely high confidence
+    if (finalScore < 0.95) {
+      finalScore = Math.min(finalScore, 0.64) // force below suggest/auto thresholds
+      reasons.push(`HARD REJECT: huge focal mismatch → clamped score to ${(finalScore * 100).toFixed(1)}%`)
+    } else {
+      reasons.push('HARD REJECT bypassed: score >= 95% despite focal mismatch (manual review recommended)')
+    }
+  }
+  if (apertureMismatch) {
+    finalScore = Math.max(0, finalScore - 0.08)
+    reasons.push(`Penalty: aperture mismatch → -8% (new score ${(finalScore * 100).toFixed(1)}%)`)
+  }
   
   reasons.push(`FINAL SCORE: ${(finalScore * 100).toFixed(1)}% (weights: maker 25%, model 50%, mount 15%, spec 10%)`)
   

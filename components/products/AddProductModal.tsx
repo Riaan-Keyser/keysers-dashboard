@@ -37,27 +37,69 @@ interface AddProductModalProps {
 }
 
 export function AddProductModal({ isOpen, onClose, initialSearchTerm = "", onSubmit }: AddProductModalProps) {
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState({
     name: initialSearchTerm,
     brand: "",
     model: "",
     variant: "",
     productType: "CAMERA_BODY",
+    activateNow: true,
     buyPriceMin: "",
     buyPriceMax: "",
     consignPriceMin: "",
     consignPriceMax: "",
     description: "",
+    // For non-lens products this is free-form text.
     specifications: "",
+    // Structured lens specs (used to build JSON when productType === LENS)
+    lensMount: "",
+    lensFocalMin: "",
+    lensFocalMax: "",
+    lensApertureMin: "",
+    lensApertureMax: "",
     imageUrl: ""
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(formData)
+
+    const nextErrors: Record<string, string> = {}
+    if (formData.productType === "LENS" && formData.activateNow) {
+      if (!formData.lensMount.trim()) nextErrors.lensMount = "Mount is required to activate a lens"
+      if (!formData.lensFocalMin.trim()) nextErrors.lensFocalMin = "Focal min is required to activate a lens"
+      if (!formData.lensApertureMin.trim()) nextErrors.lensApertureMin = "Aperture min is required to activate a lens"
+    }
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+
+    // Build specs payload
+    let specificationsPayload: string | null = formData.specifications || null
+    if (formData.productType === "LENS") {
+      const lensSpecs: any = {
+        mount: formData.lensMount.trim() || undefined,
+        focal_min_mm: formData.lensFocalMin ? Number(formData.lensFocalMin) : undefined,
+        focal_max_mm: formData.lensFocalMax ? Number(formData.lensFocalMax) : undefined,
+        aperture_min: formData.lensApertureMin ? Number(formData.lensApertureMin) : undefined,
+        aperture_max: formData.lensApertureMax ? Number(formData.lensApertureMax) : undefined,
+      }
+      // remove undefined
+      Object.keys(lensSpecs).forEach((k) => lensSpecs[k] === undefined && delete lensSpecs[k])
+      specificationsPayload = JSON.stringify(lensSpecs)
+    }
+
+    onSubmit({
+      ...formData,
+      specifications: specificationsPayload,
+    })
   }
 
   const handleChange = (field: string, value: string) => {
+    // Handle boolean fields stored in state as booleans
+    if (field === "activateNow") {
+      setFormData({ ...formData, activateNow: value === "true" })
+      return
+    }
     setFormData({ ...formData, [field]: value })
   }
 
@@ -133,6 +175,79 @@ export function AddProductModal({ isOpen, onClose, initialSearchTerm = "", onSub
               ))}
             </Select>
           </div>
+
+          {/* Activation */}
+          <div>
+            <Label>Activate immediately</Label>
+            <Select
+              value={formData.activateNow ? "YES" : "NO"}
+              onChange={(e) => handleChange("activateNow", e.target.value === "YES" ? "true" : "false")}
+            >
+              <option value="YES">Yes (Publish)</option>
+              <option value="NO">No (Save as Draft)</option>
+            </Select>
+            <p className="text-xs text-gray-500 mt-1">
+              Lenses can’t be activated unless mount + focal min + aperture min are provided.
+            </p>
+          </div>
+
+          {/* Lens structured fields */}
+          {formData.productType === "LENS" && (
+            <div className="md:col-span-2 border rounded-lg p-4 bg-gray-50 space-y-4">
+              <div className="font-semibold text-gray-900">Lens required specs (for activation)</div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Mount {formData.activateNow ? "*" : "(optional)"}</Label>
+                  <Input
+                    value={formData.lensMount}
+                    onChange={(e) => handleChange("lensMount", e.target.value)}
+                    placeholder="e.g., Canon EF"
+                  />
+                  {errors.lensMount && <p className="text-xs text-red-600 mt-1">{errors.lensMount}</p>}
+                </div>
+                <div />
+                <div>
+                  <Label>Focal min (mm) {formData.activateNow ? "*" : "(optional)"}</Label>
+                  <Input
+                    type="number"
+                    value={formData.lensFocalMin}
+                    onChange={(e) => handleChange("lensFocalMin", e.target.value)}
+                  />
+                  {errors.lensFocalMin && <p className="text-xs text-red-600 mt-1">{errors.lensFocalMin}</p>}
+                </div>
+                <div>
+                  <Label>Focal max (mm) (optional)</Label>
+                  <Input
+                    type="number"
+                    value={formData.lensFocalMax}
+                    onChange={(e) => handleChange("lensFocalMax", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Aperture min {formData.activateNow ? "*" : "(optional)"}</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={formData.lensApertureMin}
+                    onChange={(e) => handleChange("lensApertureMin", e.target.value)}
+                  />
+                  {errors.lensApertureMin && <p className="text-xs text-red-600 mt-1">{errors.lensApertureMin}</p>}
+                </div>
+                <div>
+                  <Label>Aperture max (optional)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={formData.lensApertureMax}
+                    onChange={(e) => handleChange("lensApertureMax", e.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-600">
+                These values are stored in `specifications` JSON so the product can be safely activated.
+              </p>
+            </div>
+          )}
 
           {/* Buy Price Range */}
           <div>

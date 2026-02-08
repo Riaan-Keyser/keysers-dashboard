@@ -344,12 +344,20 @@ export default function ItemVerificationPage() {
       // Select the newly added product
       await handleProductSelect(data.product)
       
-      // Show success message
-      setAlertModal({
-        isOpen: true,
-        message: "Product added successfully to the database!",
-        type: "success"
-      })
+      // Show success message (draft-aware)
+      if (data.draft) {
+        setAlertModal({
+          isOpen: true,
+          message: `${data.draftReason || "Saved as draft."} This product is NOT active/published yet.`,
+          type: "warning"
+        })
+      } else {
+        setAlertModal({
+          isOpen: true,
+          message: "Product added successfully to the database!",
+          type: "success"
+        })
+      }
     } catch (error: any) {
       setAddingProduct(false)
       setAlertModal({

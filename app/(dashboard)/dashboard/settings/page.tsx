@@ -20,9 +20,21 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [blockingCatalogSummary, setBlockingCatalogSummary] = useState<{ open_blocking_count: number }>({
+    open_blocking_count: 0,
+  })
+  const [pendingEnrichmentSummary, setPendingEnrichmentSummary] = useState<{ pending_review_count: number }>({
+    pending_review_count: 0,
+  })
+  const [failedWebhooksSummary, setFailedWebhooksSummary] = useState<{ failed_not_ignored_count: number }>({
+    failed_not_ignored_count: 0,
+  })
 
   useEffect(() => {
     fetchSettings()
+    fetchBlockingCatalogIssues()
+    fetchPendingEnrichmentReviews()
+    fetchFailedWebhooks()
   }, [])
 
   const fetchSettings = async () => {
@@ -58,6 +70,39 @@ export default function SettingsPage() {
       alert("Failed to save settings")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const fetchBlockingCatalogIssues = async () => {
+    try {
+      const res = await fetch("/api/admin/catalog/issues/summary")
+      if (!res.ok) return
+      const data = await res.json()
+      setBlockingCatalogSummary({ open_blocking_count: data.open_blocking_count || 0 })
+    } catch {
+      // ignore
+    }
+  }
+
+  const fetchPendingEnrichmentReviews = async () => {
+    try {
+      const res = await fetch("/api/admin/enrichment-reviews/summary")
+      if (!res.ok) return
+      const data = await res.json()
+      setPendingEnrichmentSummary({ pending_review_count: data.pending_review_count || 0 })
+    } catch {
+      // ignore
+    }
+  }
+
+  const fetchFailedWebhooks = async () => {
+    try {
+      const res = await fetch("/api/admin/webhooks/events/summary")
+      if (!res.ok) return
+      const data = await res.json()
+      setFailedWebhooksSummary({ failed_not_ignored_count: data.failed_not_ignored_count || 0 })
+    } catch {
+      // ignore
     }
   }
 
@@ -128,6 +173,87 @@ export default function SettingsPage() {
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-purple-500" />
+            </div>
+          </CardHeader>
+        </Card>
+      </Link>
+
+      {/* Blocking Catalog Issues (Category A) */}
+      <Link href="/dashboard/settings/catalog-issues">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow border-red-200">
+          <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Package className="h-6 w-6 text-red-600" />
+                <div>
+                  <CardTitle className="text-red-900 flex items-center gap-2">
+                    Blocking Catalog Issues
+                    {blockingCatalogSummary.open_blocking_count > 0 && (
+                      <span className="bg-red-600 text-white text-xs font-bold rounded-full px-2 py-0.5">
+                        {blockingCatalogSummary.open_blocking_count}
+                      </span>
+                    )}
+                  </CardTitle>
+                  <CardDescription className="text-red-700">
+                    Admin-only: review and resolve catalog items that are unsafe/incomplete
+                  </CardDescription>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-red-500" />
+            </div>
+          </CardHeader>
+        </Card>
+      </Link>
+
+      {/* Pending Enrichment Reviews (Category B) */}
+      <Link href="/dashboard/settings/enrichment-reviews">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow border-orange-200">
+          <CardHeader className="bg-gradient-to-r from-orange-50 to-yellow-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Package className="h-6 w-6 text-orange-600" />
+                <div>
+                  <CardTitle className="text-orange-900 flex items-center gap-2">
+                    Pending Enrichment Reviews
+                    {pendingEnrichmentSummary.pending_review_count > 0 && (
+                      <span className="bg-orange-600 text-white text-xs font-bold rounded-full px-2 py-0.5">
+                        {pendingEnrichmentSummary.pending_review_count}
+                      </span>
+                    )}
+                  </CardTitle>
+                  <CardDescription className="text-orange-700">
+                    Admin-only: approve or reject Lens spec enrichment suggestions
+                  </CardDescription>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-orange-500" />
+            </div>
+          </CardHeader>
+        </Card>
+      </Link>
+
+      {/* Failed Webhook Events (Category C) */}
+      <Link href="/dashboard/settings/webhook-events">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow border-red-200">
+          <CardHeader className="bg-gradient-to-r from-red-50 to-pink-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Package className="h-6 w-6 text-red-600" />
+                <div>
+                  <CardTitle className="text-red-900 flex items-center gap-2">
+                    Failed Webhook Events
+                    {failedWebhooksSummary.failed_not_ignored_count > 0 && (
+                      <span className="bg-red-600 text-white text-xs font-bold rounded-full px-2 py-0.5">
+                        {failedWebhooksSummary.failed_not_ignored_count}
+                      </span>
+                    )}
+                  </CardTitle>
+                  <CardDescription className="text-red-700">
+                    Admin-only: monitor and replay webhook events from the WhatsApp bot
+                  </CardDescription>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-red-500" />
             </div>
           </CardHeader>
         </Card>

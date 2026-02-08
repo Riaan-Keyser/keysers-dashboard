@@ -5,12 +5,23 @@
  * Matches catalog lens items with Lensfun database entries and enriches
  * specifications using the canonical confidence scoring function.
  * 
+ * IMPORTANT: This script works with:
+ * - catalog_items table in keysers_inventory database (catalog data)
+ * - catalog_enrichment_suggestions table in keysers_inventory (audit trail)
+ * - lensfun_lenses table in keysers_dashboard database (Lensfun mirror)
+ * 
  * Usage:
  *   npx tsx scripts/enrich_catalog_from_lensfun.ts [--dry-run] [--force]
  * 
  * Options:
  *   --dry-run  Show what would be enriched without making changes
- *   --force    Re-process items that already have lensfun enrichment
+ *   --force    Re-process items that already have COMPLETE specs (focal + aperture)
+ * 
+ * Safety Rules:
+ * - Lenses with BOTH focal_min_mm AND aperture_min are considered COMPLETE
+ * - Complete lenses are SKIPPED unless --force is used
+ * - Only NULL fields are promoted from Lensfun (never overwrites existing data)
+ * - specifications.lensfun audit block is always written for traceability
  * 
  * Confidence thresholds:
  *   >= 0.85  Auto-fill specs (mark as AUTO_APPLIED)
@@ -18,7 +29,9 @@
  *   < 0.65   Skip (no match)
  */
 
+import 'dotenv/config'
 import { prisma } from '@/lib/prisma'
+import { query } from '@/lib/inventory-db'
 import {
   computeLensfunMatchConfidence,
   findBestLensfunMatches,
@@ -32,15 +45,36 @@ const CONFIDENCE_SUGGEST = 0.65
 
 interface EnrichmentStats {
   total: number
-  skipped: number
+  complete: number // Skipped due to having complete specs
+  skipped: number // Skipped for other reasons (already enriched, no match, etc.)
   autoApplied: number
   suggested: number
   noMatch: number
   errors: number
 }
 
+interface EnrichmentResult {
+  action: 'auto' | 'suggest' | 'skip_complete' | 'skip' | 'error'
+  score?: number
+  reasons?: string[]
+}
+
 /**
- * Check if a product already has Lensfun enrichment
+ * Check if a catalog item has COMPLETE specs
+ * Complete = BOTH focal_min_mm AND aperture_min are populated
+ */
+function isComplete(specs: any): boolean {
+  return !!(
+    specs &&
+    specs.focal_min_mm !== null &&
+    specs.focal_min_mm !== undefined &&
+    specs.aperture_min !== null &&
+    specs.aperture_min !== undefined
+  )
+}
+
+/**
+ * Check if a catalog item already has Lensfun enrichment
  */
 function hasLensfunEnrichment(specs: any): boolean {
   return !!(specs && specs.lensfun && specs.lensfun.match_score)
@@ -50,28 +84,30 @@ function hasLensfunEnrichment(specs: any): boolean {
  * Enrich a single catalog item
  */
 async function enrichCatalogItem(
-  product: any,
+  catalogRow: any,
   lensfunCandidates: LensfunLens[],
   dryRun: boolean,
   force: boolean
-): Promise<'auto' | 'suggest' | 'skip' | 'error'> {
+): Promise<EnrichmentResult> {
   try {
     // Skip if not a lens
-    if (product.productType !== 'LENS') {
-      return 'skip'
+    if (!catalogRow.product_type || !catalogRow.product_type.toLowerCase().includes('lens')) {
+      return { action: 'skip' }
     }
     
-    // Skip if already enriched (unless force)
-    const specs = product.specifications || {}
-    if (!force && hasLensfunEnrichment(specs)) {
-      return 'skip'
+    // Parse specifications JSONB
+    const specs = catalogRow.specifications || {}
+    
+    // SAFETY CHECK: Skip if COMPLETE (unless --force)
+    if (!force && isComplete(specs)) {
+      return { action: 'skip_complete' }
     }
     
     // Build catalog item for matching
     const catalogItem: CatalogItem = {
-      make: product.brand,
-      output_text: product.name,
-      product_type: product.productType.toLowerCase(),
+      make: catalogRow.make,
+      output_text: catalogRow.output_text,
+      product_type: catalogRow.product_type.toLowerCase(),
       specifications: specs
     }
     
@@ -79,28 +115,29 @@ async function enrichCatalogItem(
     const matches = findBestLensfunMatches(catalogItem, lensfunCandidates, 5)
     
     if (matches.length === 0) {
-      console.log(`  ⚠️  No matches found for: ${product.brand} ${product.name}`)
-      return 'skip'
+      console.log(`  ⚠️  No matches found for: ${catalogRow.make} ${catalogRow.output_text}`)
+      return { action: 'skip' }
     }
     
     const best = matches[0]
     const { level, action } = getConfidenceLevel(best.match.score)
     
-    console.log(`  📊 ${product.brand} ${product.name}`)
+    console.log(`  📊 ${catalogRow.make} ${catalogRow.output_text}`)
     console.log(`     Best match: ${best.lens.maker} ${best.lens.model}`)
     console.log(`     Score: ${(best.match.score * 100).toFixed(1)}% (${level})`)
     console.log(`     Action: ${action}`)
+    console.log(`     Reasons: ${best.match.reasons.slice(0, 3).join(', ')}`)
     
     if (action === 'skip') {
-      return 'skip'
+      return { action: 'skip', score: best.match.score, reasons: best.match.reasons }
     }
     
     if (dryRun) {
       console.log(`     [DRY RUN] Would ${action === 'auto' ? 'auto-apply' : 'create suggestion'}`)
-      return action
+      return { action, score: best.match.score, reasons: best.match.reasons }
     }
     
-    // Prepare Lensfun enrichment data
+    // Prepare Lensfun enrichment data (audit block)
     const lensfunData = {
       match_score: best.match.score,
       lensfun_lens_id: best.lens.id,
@@ -115,6 +152,9 @@ async function enrichCatalogItem(
       enriched_at: new Date().toISOString()
     }
     
+    // Create immutable BEFORE snapshot
+    const specsBefore = JSON.parse(JSON.stringify(specs))
+    
     if (action === 'auto') {
       // Auto-apply: merge into specifications
       const updatedSpecs = {
@@ -124,69 +164,232 @@ async function enrichCatalogItem(
         confidence: best.match.score
       }
       
-      // Promote to top-level if missing
-      if (!specs.mount && lensfunData.mounts.length > 0) {
+      // SAFETY: Only promote to top-level if MISSING (NULL/undefined)
+      // Never overwrite existing values
+      if (!specs.mount && lensfunData.mounts && lensfunData.mounts.length > 0) {
         updatedSpecs.mount = lensfunData.mounts[0]
         updatedSpecs.mounts = lensfunData.mounts
       }
-      if (!specs.focal_min_mm && lensfunData.focal_min_mm) {
+      
+      // Only promote focal fields if focal_min_mm is NULL
+      if (!specs.focal_min_mm && lensfunData.focal_min_mm !== null) {
         updatedSpecs.focal_min_mm = lensfunData.focal_min_mm
       }
-      if (!specs.focal_max_mm && lensfunData.focal_max_mm) {
+      if (!specs.focal_max_mm && lensfunData.focal_max_mm !== null) {
         updatedSpecs.focal_max_mm = lensfunData.focal_max_mm
       }
-      if (!specs.aperture_min && lensfunData.aperture_min) {
+      
+      // Only promote aperture fields if aperture_min is NULL
+      if (!specs.aperture_min && lensfunData.aperture_min !== null) {
         updatedSpecs.aperture_min = lensfunData.aperture_min
       }
-      if (!specs.aperture_max && lensfunData.aperture_max) {
+      if (!specs.aperture_max && lensfunData.aperture_max !== null) {
         updatedSpecs.aperture_max = lensfunData.aperture_max
       }
       
-      // Update product
-      await prisma.product.update({
-        where: { id: product.id },
-        data: {
-          specifications: JSON.stringify(updatedSpecs)
-        }
-      })
+      // Update catalog_items table (keysers_inventory)
+      await query(`
+        UPDATE catalog_items
+        SET specifications = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [JSON.stringify(updatedSpecs), catalogRow.id])
       
-      // Create enrichment record as AUTO_APPLIED
-      await prisma.catalogEnrichmentSuggestion.create({
-        data: {
-          productId: product.id,
-          lensfunLensId: best.lens.id,
-          confidenceScore: best.match.score,
-          matchReasons: best.match.reasons,
-          suggestedSpecs: lensfunData,
-          status: 'AUTO_APPLIED'
-        }
-      })
+      // Create immutable audit record in keysers_inventory
+      await query(`
+        INSERT INTO catalog_enrichment_suggestions (
+          catalog_item_id,
+          lensfun_lens_id,
+          lensfun_maker,
+          lensfun_model,
+          confidence_score,
+          match_reasons,
+          catalog_output_text,
+          catalog_make,
+          specs_before,
+          specs_after,
+          suggested_specs,
+          status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT (catalog_item_id, lensfun_lens_id) DO UPDATE SET
+          confidence_score = EXCLUDED.confidence_score,
+          match_reasons = EXCLUDED.match_reasons,
+          specs_after = EXCLUDED.specs_after,
+          status = EXCLUDED.status,
+          updated_at = NOW()
+      `, [
+        catalogRow.id,
+        best.lens.id,
+        best.lens.maker,
+        best.lens.model,
+        best.match.score,
+        best.match.reasons,
+        catalogRow.output_text,
+        catalogRow.make,
+        JSON.stringify(specsBefore),
+        JSON.stringify(updatedSpecs),
+        JSON.stringify(lensfunData),
+        'AUTO_APPLIED'
+      ])
       
       console.log(`     ✅ Auto-applied specs`)
-      return 'auto'
+      return { action: 'auto', score: best.match.score, reasons: best.match.reasons }
       
     } else if (action === 'suggest') {
-      // Create suggestion for review
-      await prisma.catalogEnrichmentSuggestion.create({
-        data: {
-          productId: product.id,
-          lensfunLensId: best.lens.id,
-          confidenceScore: best.match.score,
-          matchReasons: best.match.reasons,
-          suggestedSpecs: lensfunData,
-          status: 'PENDING_REVIEW'
-        }
-      })
+      // Create suggestion for review (no changes to catalog_items)
+      // Enforce: at most ONE PENDING_REVIEW per catalog_item_id
       
-      console.log(`     📝 Created suggestion for review`)
-      return 'suggest'
+      // Check if a PENDING_REVIEW already exists for this catalog_item
+      const existingRes = await query(
+        `
+SELECT id, confidence_score
+FROM catalog_enrichment_suggestions
+WHERE catalog_item_id = $1
+  AND status = 'PENDING_REVIEW'
+LIMIT 1;
+        `,
+        [catalogRow.id]
+      )
+      
+      const existing = existingRes.rows[0]
+      const newScore = best.match.score
+      
+      if (existing) {
+        const existingScore = Number(existing.confidence_score)
+        
+        if (newScore > existingScore) {
+          // Supersede the existing and insert new as PENDING_REVIEW
+          await query(
+            `
+UPDATE catalog_enrichment_suggestions
+SET
+  status = 'SUPERSEDED',
+  superseded_at = NOW(),
+  superseded_by_id = NULL,
+  review_note = COALESCE(review_note || E'\n\n', '') || $2,
+  updated_at = NOW()
+WHERE id = $1;
+            `,
+            [
+              existing.id,
+              `Superseded by higher confidence match (new score ${newScore.toFixed(3)} > old ${existingScore.toFixed(3)})`,
+            ]
+          )
+          
+          // Now insert new as PENDING_REVIEW (unique index will pass since old is now SUPERSEDED)
+          await query(
+            `
+INSERT INTO catalog_enrichment_suggestions (
+  catalog_item_id,
+  lensfun_lens_id,
+  lensfun_maker,
+  lensfun_model,
+  confidence_score,
+  match_reasons,
+  catalog_output_text,
+  catalog_make,
+  specs_before,
+  suggested_specs,
+  status
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+            `,
+            [
+              catalogRow.id,
+              best.lens.id,
+              best.lens.maker,
+              best.lens.model,
+              best.match.score,
+              best.match.reasons,
+              catalogRow.output_text,
+              catalogRow.make,
+              JSON.stringify(specsBefore),
+              JSON.stringify(lensfunData),
+              'PENDING_REVIEW',
+            ]
+          )
+          
+          console.log(`     📝 Created suggestion (superseded existing lower-confidence match)`)
+        } else {
+          // New score <= existing, insert new as SUPERSEDED immediately
+          await query(
+            `
+INSERT INTO catalog_enrichment_suggestions (
+  catalog_item_id,
+  lensfun_lens_id,
+  lensfun_maker,
+  lensfun_model,
+  confidence_score,
+  match_reasons,
+  catalog_output_text,
+  catalog_make,
+  specs_before,
+  suggested_specs,
+  status,
+  superseded_at,
+  review_note
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12);
+            `,
+            [
+              catalogRow.id,
+              best.lens.id,
+              best.lens.maker,
+              best.lens.model,
+              best.match.score,
+              best.match.reasons,
+              catalogRow.output_text,
+              catalogRow.make,
+              JSON.stringify(specsBefore),
+              JSON.stringify(lensfunData),
+              'SUPERSEDED',
+              `Not kept: lower confidence (${newScore.toFixed(3)}) than existing pending review (${existingScore.toFixed(3)})`,
+            ]
+          )
+          
+          console.log(`     ⏭️  Skipped (lower confidence than existing pending review)`)
+        }
+      } else {
+        // No existing PENDING_REVIEW, insert new
+        await query(
+          `
+INSERT INTO catalog_enrichment_suggestions (
+  catalog_item_id,
+  lensfun_lens_id,
+  lensfun_maker,
+  lensfun_model,
+  confidence_score,
+  match_reasons,
+  catalog_output_text,
+  catalog_make,
+  specs_before,
+  suggested_specs,
+  status
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+          `,
+          [
+            catalogRow.id,
+            best.lens.id,
+            best.lens.maker,
+            best.lens.model,
+            best.match.score,
+            best.match.reasons,
+            catalogRow.output_text,
+            catalogRow.make,
+            JSON.stringify(specsBefore),
+            JSON.stringify(lensfunData),
+            'PENDING_REVIEW',
+          ]
+        )
+        
+        console.log(`     📝 Created suggestion for review`)
+      }
+      
+      return { action: 'suggest', score: best.match.score, reasons: best.match.reasons }
     }
     
-    return 'skip'
+    return { action: 'skip' }
     
   } catch (error: any) {
-    console.error(`  ❌ Error enriching ${product.brand} ${product.name}: ${error.message}`)
-    return 'error'
+    console.error(`  ❌ Error enriching ${catalogRow.make} ${catalogRow.output_text}: ${error.message}`)
+    return { action: 'error' }
   }
 }
 
@@ -206,7 +409,20 @@ async function main() {
   try {
     // Step 1: Load all Lensfun lenses
     console.log('📥 Loading Lensfun database...')
-    const lensfunLenses = await prisma.lensfunLens.findMany()
+    const latestRun = await prisma.lensfunImportRun.findFirst({
+      orderBy: { startedAt: 'desc' }
+    })
+
+    if (!latestRun) {
+      console.error('❌ No Lensfun import runs found.')
+      console.error('   Run: npx tsx scripts/import_lensfun.ts --offline')
+      process.exit(1)
+    }
+
+    console.log(`🧾 Using latest Lensfun import run: ${latestRun.id}`)
+    const lensfunLenses = await prisma.lensfunLens.findMany({
+      where: { importRunId: latestRun.id }
+    })
     
     if (lensfunLenses.length === 0) {
       console.error('❌ No Lensfun lenses found in database.')
@@ -216,14 +432,18 @@ async function main() {
     
     console.log(`✅ Loaded ${lensfunLenses.length} Lensfun lenses\n`)
     
-    // Step 2: Load all catalog lens products
-    console.log('📥 Loading catalog lens items...')
-    const products = await prisma.product.findMany({
-      where: {
-        productType: 'LENS',
-        active: true
-      }
-    })
+    // Step 2: Load all catalog lens items from keysers_inventory
+    console.log('📥 Loading catalog lens items from keysers_inventory...')
+    const catalogItems = await query(`
+      SELECT 
+        id, make, product_type, output_text, is_active,
+        specifications, legacy_id
+      FROM catalog_items
+      WHERE product_type ILIKE '%lens%'
+      AND is_active = true
+    `)
+    
+    const products = catalogItems.rows
     
     console.log(`✅ Found ${products.length} active lens products\n`)
     
@@ -237,7 +457,7 @@ async function main() {
     const lensfunByMaker = new Map<string, LensfunLens[]>()
     
     for (const lens of lensfunLenses) {
-      const makerKey = lens.makerNormalized.toLowerCase()
+      const makerKey = lens.maker.toLowerCase()
       if (!lensfunByMaker.has(makerKey)) {
         lensfunByMaker.set(makerKey, [])
       }
@@ -251,6 +471,7 @@ async function main() {
     
     const stats: EnrichmentStats = {
       total: products.length,
+      complete: 0,
       skipped: 0,
       autoApplied: 0,
       suggested: 0,
@@ -258,24 +479,42 @@ async function main() {
       errors: 0
     }
     
-    for (const product of products) {
-      const makerKey = product.brand.toLowerCase()
+    const autoAppliedDetails: Array<{
+      make: string
+      output_text: string
+      score: number
+      reasons: string[]
+    }> = []
+    
+    for (const catalogRow of products) {
+      const makerKey = catalogRow.make.toLowerCase()
       const candidates = lensfunByMaker.get(makerKey) || []
       
       if (candidates.length === 0) {
-        console.log(`  ⚠️  No Lensfun candidates for maker: ${product.brand}`)
+        console.log(`  ⚠️  No Lensfun candidates for maker: ${catalogRow.make}`)
         stats.noMatch++
         continue
       }
       
-      const result = await enrichCatalogItem(product, candidates, dryRun, force)
+      const result = await enrichCatalogItem(catalogRow, candidates, dryRun, force)
       
-      switch (result) {
+      switch (result.action) {
         case 'auto':
           stats.autoApplied++
+          if (result.score && result.reasons) {
+            autoAppliedDetails.push({
+              make: catalogRow.make,
+              output_text: catalogRow.output_text,
+              score: result.score,
+              reasons: result.reasons
+            })
+          }
           break
         case 'suggest':
           stats.suggested++
+          break
+        case 'skip_complete':
+          stats.complete++
           break
         case 'skip':
           stats.skipped++
@@ -286,32 +525,43 @@ async function main() {
       }
     }
     
-    // Step 5: Summary
+    // Step 5: Print summary
     console.log('\n' + '='.repeat(60))
-    console.log('📊 Enrichment Summary')
+    console.log('📊 ENRICHMENT SUMMARY')
     console.log('='.repeat(60))
-    console.log(`Total items:           ${stats.total}`)
-    console.log(`Auto-applied (≥0.85):  ${stats.autoApplied}`)
-    console.log(`Suggested (0.65-0.85): ${stats.suggested}`)
-    console.log(`No match (<0.65):      ${stats.noMatch}`)
-    console.log(`Skipped (existing):    ${stats.skipped}`)
-    console.log(`Errors:                ${stats.errors}`)
+    console.log(`Total lens products:        ${stats.total}`)
+    console.log(`  ✅ Auto-applied:          ${stats.autoApplied}`)
+    console.log(`  📝 Suggested for review:  ${stats.suggested}`)
+    console.log(`  ⏭️  Skipped (complete):    ${stats.complete}`)
+    console.log(`  ⏭️  Skipped (other):       ${stats.skipped}`)
+    console.log(`  ⚠️  No match:              ${stats.noMatch}`)
+    console.log(`  ❌ Errors:                ${stats.errors}`)
     console.log('='.repeat(60))
     
+    // Show lowest 20 auto-applies with scores
+    if (autoAppliedDetails.length > 0) {
+      console.log('\n📉 LOWEST 20 AUTO-APPLIED MATCHES (by confidence score):')
+      console.log('='.repeat(60))
+      
+      const sortedByScore = [...autoAppliedDetails].sort((a, b) => a.score - b.score)
+      const lowest20 = sortedByScore.slice(0, 20)
+      
+      lowest20.forEach((item, idx) => {
+        console.log(`\n${idx + 1}. ${item.make} ${item.output_text}`)
+        console.log(`   Score: ${(item.score * 100).toFixed(1)}%`)
+        console.log(`   Reasons: ${item.reasons.slice(0, 3).join(', ')}`)
+      })
+    }
+    
     if (dryRun) {
-      console.log('\n⚠️  DRY RUN - No changes were made')
+      console.log('\n⚠️  DRY RUN MODE - No changes were made')
       console.log('   Run without --dry-run to apply changes')
     } else {
-      console.log('\n✅ Enrichment complete!')
-      
-      if (stats.suggested > 0) {
-        console.log(`\nℹ️  ${stats.suggested} suggestions await review in the dashboard.`)
-      }
+      console.log(`\n✅ Enrichment complete! ${stats.autoApplied + stats.suggested} records processed.`)
     }
     
   } catch (error: any) {
-    console.error('❌ Enrichment failed:', error.message)
-    console.error(error.stack)
+    console.error('❌ Fatal error:', error)
     process.exit(1)
   } finally {
     await prisma.$disconnect()

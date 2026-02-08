@@ -17,7 +17,9 @@ import {
   PackagePlus,
   CreditCard,
   Calendar,
-  Upload
+  Upload,
+  ClipboardCheck,
+  Webhook
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 
@@ -40,6 +42,8 @@ const navItems: NavItem[] = [
   { name: "Pricing", href: "/dashboard/pricing", icon: DollarSign },
   { name: "WhatsApp Messages", href: "/dashboard/whatsapp", icon: MessageCircle },
   { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+  { name: "Enrichment Reviews", href: "/dashboard/settings/enrichment-reviews", icon: ClipboardCheck },
+  { name: "Webhook Events", href: "/dashboard/settings/webhook-events", icon: Webhook },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ]
 
@@ -53,6 +57,9 @@ export function Sidebar() {
     inventory: 0,
     consignment: 0,
     repairs: 0,
+    blockingCatalogIssues: 0,
+    pendingEnrichmentReviews: 0,
+    failedWebhooks: 0,
   })
 
   useEffect(() => {
@@ -68,14 +75,67 @@ export function Sidebar() {
       }
     }
 
+    const fetchBlockingCatalogIssues = async () => {
+      try {
+        const response = await fetch("/api/admin/catalog/issues/summary")
+        if (!response.ok) return
+        const data = await response.json()
+        setNotificationCounts((prev) => ({
+          ...prev,
+          blockingCatalogIssues: data.open_blocking_count || 0,
+        }))
+      } catch {
+        // ignore
+      }
+    }
+
+    const fetchPendingEnrichmentReviews = async () => {
+      try {
+        const response = await fetch("/api/admin/enrichment-reviews/summary")
+        if (!response.ok) return
+        const data = await response.json()
+        setNotificationCounts((prev) => ({
+          ...prev,
+          pendingEnrichmentReviews: data.pending_review_count || 0,
+        }))
+      } catch {
+        // ignore
+      }
+    }
+
+    const fetchFailedWebhooks = async () => {
+      try {
+        const response = await fetch("/api/admin/webhooks/events/summary")
+        if (!response.ok) return
+        const data = await response.json()
+        setNotificationCounts((prev) => ({
+          ...prev,
+          failedWebhooks: data.failed_not_ignored_count || 0,
+        }))
+      } catch {
+        // ignore
+      }
+    }
+
     fetchNotificationCounts()
+    fetchBlockingCatalogIssues()
+    fetchPendingEnrichmentReviews()
+    fetchFailedWebhooks()
 
     // Refresh counts every 30 seconds
-    const interval = setInterval(fetchNotificationCounts, 30000)
+    const interval = setInterval(() => {
+      fetchNotificationCounts()
+      fetchBlockingCatalogIssues()
+      fetchPendingEnrichmentReviews()
+      fetchFailedWebhooks()
+    }, 30000)
     
     // Listen for manual refresh requests from other components
     const handleRefreshCounts = () => {
       fetchNotificationCounts()
+      fetchBlockingCatalogIssues()
+      fetchPendingEnrichmentReviews()
+      fetchFailedWebhooks()
     }
     window.addEventListener('refreshNotificationCounts', handleRefreshCounts)
     
@@ -102,8 +162,11 @@ export function Sidebar() {
           else if (item.href === "/dashboard/awaiting-payment") badgeCount = notificationCounts.awaitingPayment
           else if (item.href === "/dashboard/uploading-stock") badgeCount = notificationCounts.uploadingStock
           else if (item.href === "/dashboard/inventory") badgeCount = notificationCounts.inventory
-          else if (item.href === "/dashboard/consignment") badgeCount = notificationCounts.consignment
-          else if (item.href === "/dashboard/repairs") badgeCount = notificationCounts.repairs
+    else if (item.href === "/dashboard/consignment") badgeCount = notificationCounts.consignment
+    else if (item.href === "/dashboard/repairs") badgeCount = notificationCounts.repairs
+    else if (item.href === "/dashboard/settings") badgeCount = notificationCounts.blockingCatalogIssues + notificationCounts.failedWebhooks
+    else if (item.href === "/dashboard/settings/enrichment-reviews") badgeCount = notificationCounts.pendingEnrichmentReviews
+    else if (item.href === "/dashboard/settings/webhook-events") badgeCount = notificationCounts.failedWebhooks
           
           const showBadge = badgeCount > 0
           
