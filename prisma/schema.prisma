@@ -1134,3 +1134,37 @@ model Client {
 // ========================================
 
 // Add these relations to User model (to be added separately)
+
+// ========================================
+// WEBHOOK EVENT LOGGING
+// ========================================
+
+model WebhookEventLog {
+  id                   String             @id @default(uuid()) @db.Uuid
+  eventId              String             @unique @db.Uuid // Bot-generated UUID for idempotency
+  eventType            String             // "quote_accepted", etc.
+  version              String             // Payload version "1.0"
+  receivedAt           DateTime           @default(now())
+  processedAt          DateTime?
+  status               WebhookEventStatus @default(PENDING)
+  rawPayload           Json               // Store complete payload
+  sourceIp             String?
+  signatureProvided    String?            // Signature from header (for audit)
+  signatureComputed    String?            // Computed signature (for audit)
+  signatureValid       Boolean            @default(false)
+  errorMessage         String?            @db.Text
+  relatedEntityId      String?
+  relatedEntityType    String?
+  
+  @@index([eventType, status, receivedAt])
+  @@index([status, receivedAt])
+  @@map("webhook_event_logs")
+}
+
+enum WebhookEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DUPLICATE
+}
