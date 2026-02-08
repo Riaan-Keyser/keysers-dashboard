@@ -10,6 +10,7 @@ A comprehensive business management system for Keysers Camera Equipment, built w
 - Complete equipment details including brand, model, serial numbers
 - Image gallery support
 - Automatic SKU generation
+- **Lensfun integration** - Automatic lens specification enrichment with confidence scoring
 
 ✅ **Vendor/Client Management**
 - Track vendors who sell equipment to you
@@ -592,6 +593,7 @@ keysers-dashboard/
 Detailed implementation documentation is available in the following files:
 
 ### Latest Enhancements
+- **LENSFUN_INTEGRATION.md** - Lensfun offline mirror integration with canonical matching confidence function
 - **INSPECTION_WORKFLOW_ENHANCEMENTS_SUMMARY.md** - "Not interested" and "Mark for repair" features
 - **INSPECTION_WORKFLOW_ENHANCEMENTS_TESTING.md** - Testing guide for new inspection features
 

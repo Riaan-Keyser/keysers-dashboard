@@ -552,6 +552,7 @@ model Product {
   knownIssues       KnownIssue[]
   questionTemplates ProductQuestionTemplate[]
   verifiedItems     VerifiedGearItem[]
+  enrichmentSuggestions CatalogEnrichmentSuggestion[]
 
   @@unique([brand, model, variant])
   @@index([productType])
@@ -1167,4 +1168,100 @@ enum WebhookEventStatus {
   PROCESSED
   FAILED
   DUPLICATE
+}
+
+// ========================================
+// LENSFUN CATALOG INTEGRATION
+// ========================================
+
+// Lensfun Lens - offline mirror of Lensfun.org lens database
+model LensfunLens {
+  id        String   @id @default(uuid()) @db.Uuid
+  
+  // Core identification (from Lensfun XML)
+  maker     String   // e.g., "Canon", "Nikon", normalized
+  model     String   // e.g., "EF 24-105mm f/4L IS USM"
+  variant   String?  // Optional variant
+  
+  // Mount information (array)
+  mounts    String[] // e.g., ["Canon EF", "Canon EF-S"]
+  
+  // Specifications
+  cropFactor       Float?
+  aspectRatio      String?  // e.g., "3:2"
+  type             String?  // e.g., "rectilinear"
+  focalMin         Float?   // Minimum focal length in mm
+  focalMax         Float?   // Maximum focal length in mm (null for primes)
+  apertureMin      Float?   // Widest aperture (e.g., 4.0 for f/4)
+  apertureMax      Float?   // Narrowest aperture (e.g., 22.0)
+  
+  // Calibration data availability flags
+  hasDistortion    Boolean  @default(false)
+  hasVignetting    Boolean  @default(false)
+  hasTca           Boolean  @default(false) // Transverse Chromatic Aberration
+  
+  // Raw XML for reference
+  rawXml           String?  @db.Text
+  
+  // Import metadata
+  sourceFile       String?  // Which XML file this came from
+  importedAt       DateTime @default(now())
+  lastUpdatedAt    DateTime @updatedAt
+  
+  // Normalized search fields (for matching)
+  makerNormalized  String   // Lowercase, no punctuation
+  modelNormalized  String   // Lowercase, no punctuation, normalized formatting
+  searchTokens     String[] // Key tokens for fuzzy matching
+  
+  // Relations
+  enrichmentSuggestions CatalogEnrichmentSuggestion[]
+  
+  @@index([maker])
+  @@index([makerNormalized])
+  @@index([model])
+  @@index([modelNormalized])
+  @@index([mounts])
+  @@map("lensfun_lenses")
+}
+
+// Catalog Enrichment Suggestion - stores Lensfun match suggestions for review
+model CatalogEnrichmentSuggestion {
+  id               String   @id @default(uuid()) @db.Uuid
+  
+  // Link to Product (catalog item)
+  productId        String
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  // Suggested Lensfun match
+  lensfunLensId    String   @db.Uuid
+  lensfunLens      LensfunLens @relation(fields: [lensfunLensId], references: [id], onDelete: Cascade)
+  
+  // Match scoring
+  confidenceScore  Float    // 0.0 - 1.0
+  matchReasons     String[] // Debug reasons for the score
+  
+  // Suggested specifications (JSONB)
+  suggestedSpecs   Json     // Proposed specs to merge
+  
+  // Review status
+  status           EnrichmentStatus @default(PENDING_REVIEW)
+  reviewedAt       DateTime?
+  reviewedByUserId String?
+  reviewNotes      String?
+  
+  // Metadata
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@index([productId])
+  @@index([status])
+  @@index([confidenceScore])
+  @@map("catalog_enrichment_suggestions")
+}
+
+enum EnrichmentStatus {
+  PENDING_REVIEW   // Awaiting admin review
+  APPROVED         // Admin approved, specs merged
+  REJECTED         // Admin rejected suggestion
+  AUTO_APPLIED     // Automatically applied (high confidence)
 }
